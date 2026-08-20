@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.8';
+  var VERSION = '0.1.9';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -245,20 +245,30 @@
     return BUILTIN[0];
   }
 
-  // 每个聊天自己的对话记录（存聊天变量 tanuki_live.log，上限 40 条）
+  // 每个聊天 × 每个人格各自一份对话记录（聊天变量 tanuki_live.logs[人格id]，每份上限 40 条）
+  // 0.1.9 起按人格分开：换人格不再看到（也不再喂给模型）上一个人格的对话——Fan 反馈"出戏"；切回去旧的还在
+  // 老版本的 tanuki_live.log（单份）第一次读到时归入当时选中的人格
   var LOG_KEY = 'tanuki_live';
   var LOG_MAX = 40;
   function readLog() {
     try {
       var v = getVariables({ type: 'chat' });
-      var l = v && v[LOG_KEY] && Array.isArray(v[LOG_KEY].log) ? v[LOG_KEY].log : [];
+      var box = v && v[LOG_KEY];
+      if (!box) return [];
+      if (Array.isArray(box.log) && !box.logs) {   // 迁移旧单份记录
+        var legacy = box.log;
+        updateVariablesWith(function (vv) { vv = vv || {}; vv[LOG_KEY] = vv[LOG_KEY] || {}; vv[LOG_KEY].logs = {}; vv[LOG_KEY].logs[settings.persona] = legacy; delete vv[LOG_KEY].log; return vv; }, { type: 'chat' });
+        return legacy;
+      }
+      var l = box.logs && Array.isArray(box.logs[settings.persona]) ? box.logs[settings.persona] : [];
       return l;
     } catch (e) { return []; }
   }
   function writeLog(log) {
     try {
       if (log.length > LOG_MAX) log = log.slice(log.length - LOG_MAX);
-      updateVariablesWith(function (v) { v = v || {}; v[LOG_KEY] = v[LOG_KEY] || {}; v[LOG_KEY].log = log; return v; }, { type: 'chat' });
+      var pid = settings.persona;
+      updateVariablesWith(function (v) { v = v || {}; v[LOG_KEY] = v[LOG_KEY] || {}; v[LOG_KEY].logs = v[LOG_KEY].logs || {}; v[LOG_KEY].logs[pid] = log; delete v[LOG_KEY].log; return v; }, { type: 'chat' });
     } catch (e) {}
     return log;
   }
@@ -652,7 +662,7 @@
         '<div class="tl-note">拉取 = 连通性测试（拉得到 = 地址/Key/CORS 都通），从列表里选一个再保存。嘴碎的活给便宜模型干就行。</div>' +
       '</div>' +
       '<h4>数据</h4>' +
-      '<div class="tl-row"><button class="tl-btn ghost tl-set-clear">清空这个聊天里的对话</button></div>' +
+      '<div class="tl-row"><button class="tl-btn ghost tl-set-clear">清空 ' + esc(p.name) + ' 在这个聊天里的对话</button></div>' +
       '<div class="tl-note">v' + VERSION + ' · 酒馆小狸 Live · 它说的话不进主线；只有你点了「采纳」的那一条会以一次性注入塞进下一轮。</div>';
     s.querySelector('.tl-set-x').addEventListener('click', function () { toggleSettings(false); });
     s.querySelector('.tl-set-auto').addEventListener('click', function () { settings.auto = !settings.auto; saveSettings(); renderSettings(); renderHead(); });
@@ -731,7 +741,7 @@
     var prev = currentPersona();
     settings.persona = id; saveSettings();
     var p = currentPersona();
-    if (prev.id !== p.id) pushLog({ who: 'sys', text: prev.emoji + ' ' + prev.name + ' 走了，' + p.emoji + ' ' + p.name + ' 坐下了。', ts: Date.now() });
+    if (prev.id !== p.id) hideBubble();   // 各人格自己的记录，换人只是换座位，不往对方记录里写东西
     renderAll(); scrollBottom();
   }
 
