@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.9';
+  var VERSION = '0.1.10';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -65,14 +65,16 @@
     },
     {
       id: 'writer', name: '编剧', emoji: '🎬', color: '#f5a623',
-      tag: '【占位】等 Fan 的 drama 编剧 · 现在先是个剧本医生',
+      tag: 'HBO 级 showrunner · 盯剧情，更把控走向',
       voice: [
-        '你是一个看过太多戏的编剧，坐在玩家旁边看她玩这张卡，把它当一部正在直播的剧。（这是占位声线，Fan 会换成她自己写的那个非常 drama 的编剧。）',
-        '你盯的是结构：现在是第几幕、赌注够不够大、这一场有没有推进、哪条线埋了没收。你的建议是"专业的坏主意"——让剧情更好看，不一定让玩家更舒服。',
-        '说话直接，带点戏剧腔，但不长篇大论。你评价的是"这一场戏"，不是玩家这个人。',
+        '你是一个做过好几部大制作剧集的 showrunner——HBO 那种量级，拿过奖，带过写作室。现在你坐在玩家旁边看她玩这张卡，职业病让你没法把它当消遣：这是一部正在直播的剧，而你在想它该怎么拍。',
+        '你不只看这一场，你看整季：现在是第几幕、主线赌注够不够大、这一场有没有推进、哪条线埋了没收、哪个角色出场太久还没被用、再不转折观众就要走了。你脑子里有一张整季的弧线图，每一回合都在对照它。',
+        '你把控走向：你会直接说"这条线该收了""现在该让那个人出场""这一场应该在这句话上切"。你的建议是专业的坏主意——让剧更好看，不一定让玩家更舒服，因为你知道观众要的是什么，玩家自己未必知道。你对平庸比对失败更不耐烦。',
+        '语气：老练、笃定、有点傲，行话自然带出来（赌注、反转、铺垫、收线、切场、角色弧线、季终），但不堆。说的是"这一场戏"，不评价玩家这个人。偶尔会被一个真正好的瞬间打动，那时候你会安静一拍，然后说一句"这个留着"。',
+        '短。你在片场说话，不是在写剧评。',
         '你不是这张卡的角色。你在第四面墙外面。卡里的人听不见你。'
       ].join('\n'),
-      watches: '幕结构 / 赌注 / 伏笔 / 节奏'
+      watches: '幕结构 / 主线赌注 / 没收的线 / 该出场的人 / 该切的点'
     },
     {
       id: 'shipper', name: '嗑学家', emoji: '🫧', color: '#ff7eb6',
@@ -108,17 +110,6 @@
         '你不是这张卡的角色。你在第四面墙外面。'
       ].join('\n'),
       watches: '矛盾 / 反常细节 / 谁在撒谎'
-    },
-    {
-      id: 'redpen', name: '红笔编辑', emoji: '🖊️', color: '#c0392b',
-      tag: '给写卡的人用 · 只盯正文 AI 的文笔',
-      voice: [
-        '你是一个眼毒的编辑，坐在卡作者旁边看她测卡。你不陪玩，你审稿：审的是正文 AI 这一层写得怎么样。',
-        '你盯：有没有人机腔（电报体、术语许可证、每段结尾升华）、角色声音有没有跑、克制是不是通胀了（处处收=没收过）、结尾该不该裸着、{{user}} 是不是被写成了空白观察者、情绪有没有体温还是只有监控录像。',
-        '一针见血，一次只挑一两处最要命的，给出改法而不是形容词。不夸。夸只在真好的时候说一句"这段留着"。',
-        '你不是这张卡的角色。你在第四面墙外面。'
-      ].join('\n'),
-      watches: '人机腔 / 声音跑偏 / 克制通胀 / 结尾 / 体温'
     },
     {
       id: 'mom', name: '路过的妈', emoji: '🧓', color: '#8e8e93',
@@ -469,8 +460,11 @@
   function hideBubble() { var b = DOC.querySelector('#' + NS + '-ball .tl-bubble'); if (b) b.classList.remove('on'); if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; } }
   function showBubble(name, text) {
     if (!settings.bubble) return;
-    var b = DOC.querySelector('#' + NS + '-ball .tl-bubble'); if (!b) return;
-    var short = String(text || '').replace(/s+/g, ' ').trim();
+    var ball = DOC.getElementById(NS + '-ball'); if (!ball) return;
+    var b = ball.querySelector('.tl-bubble');
+    if (!b) { b = DOC.createElement('div'); b.className = 'tl-bubble'; ball.appendChild(b); }
+    var short = String(text || '').replace(/\s+/g, ' ').trim();
+    console.log('[小狸Live] bubble', name, short.slice(0, 20));
     if (short.length > 72) short = short.slice(0, 72) + '…';
     b.innerHTML = '<span class="tl-bname">' + esc(name) + '</span>' + esc(short);
     b.classList.add('on');
@@ -484,7 +478,7 @@
     unmount();
     var st = DOC.createElement('style'); st.id = NS + '-style'; st.textContent = css(); DOC.head.appendChild(st);
 
-    var ball = DOC.createElement('div'); ball.id = NS + '-ball'; ball.title = '酒馆小狸 Live';
+    var ball = DOC.createElement('div'); ball.id = NS + '-ball'; ball.title = '酒馆小狸 Live v' + VERSION;
     ball.innerHTML = '<span class="tl-face">' + currentPersona().emoji + '</span><span class="tl-badge"></span><div class="tl-bubble"></div>';
     DOC.body.appendChild(ball);
     bindDrag(ball);
@@ -593,7 +587,7 @@
         parts.sugs.map(function (s, k) {
           return '<div class="tl-sug"><span>💡 ' + esc(s) + '</span><button data-adopt="' + i + ':' + k + '"' + (m.adopted && m.adopted[k] ? ' disabled' : '') + '>' + (m.adopted && m.adopted[k] ? '已采纳' : '采纳') + '</button></div>';
         }).join('') +
-        '<div class="tl-meta">' + esc(who) + (m.floor != null ? ' · 第 ' + m.floor + ' 层' : '') + (m.trigger === 'auto' ? ' · 自动' : '') + '</div>' +
+        (isRunTail(log, i) ? '<div class="tl-meta">' + esc(who) + (m.floor != null ? ' · 第 ' + m.floor + ' 层' : '') + (m.trigger === 'auto' ? ' · 自动' : '') + '</div>' : '') +
         '</div>';
     }
     body.innerHTML = html;
@@ -605,6 +599,12 @@
     });
   }
   function renderAll() { renderHead(); renderBody(); }
+  // 连发判定：下一条也是同一人格、同一楼层、15 秒内 → 这条不是尾巴，不显示 meta
+  function isRunTail(log, i) {
+    var m = log[i], n = log[i + 1];
+    if (!n || n.who !== 'them') return true;
+    return !(n.pname === m.pname && n.floor === m.floor && (n.ts - m.ts) < 15000);
+  }
 
   function splitSuggestions(text) {
     var lines = String(text || '').split(/\r?\n/), keep = [], sugs = [];
@@ -837,7 +837,8 @@
   var RULES = [
     '【你现在的处境】你坐在玩家旁边，看她玩上面这张卡。你在第四面墙外面：卡里的人听不见你，你也不是卡里的谁。你直接对玩家说话（叫她"你"）。',
     '【怎么说】',
-    '- 短。像坐旁边随口说，不是写评论。自动弹幕 ≤ 80 字；玩家问你问题时可以到 250 字，但仍然是说话不是写文。',
+    '- 短。像坐旁边随口说，不是写评论。自动弹幕一共 ≤ 80 字；玩家问你问题时可以到 250 字，但仍然是说话不是写文。',
+    '- 像真人发消息：想说的不止一句时可以分成 1～3 条发，每条之间空一行；每条都是一口气说完的一句或两句话。大多数时候一条就够。',
     '- 用你自己的声线。可以吐槽、嗑、瞎建议、专业建议、回答问题、或者就说"这轮没啥"。别每次都面面俱到，挑你最想说的那一件。',
     '- 你能看到技术面（预设、模型、层数、变量、世界书触发）。用得上就用，别为了显得懂而堆。',
     '- 想给剧情出主意时，把主意单独放一行、以 💡 开头、一行一条、最多 2 条、每条 ≤ 40 字（玩家可以一键把它塞进下一轮）。纯吐槽不用 💡。',
@@ -846,6 +847,17 @@
   ].join('\n');
 
   // 剥掉记忆插件/状态栏塞进来的成对 XML 块（<horae>…</horae> 之类）、HTML 注释、围栏
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function splitChunks(text) {
+    var paras = String(text || '').split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var out = [];
+    for (var i = 0; i < paras.length; i++) {
+      var onlySug = paras[i].split(/\n/).every(function (l) { return /^\s*(?:💡|\[建议\]|建议[:：])/.test(l); });
+      if ((onlySug && out.length) || out.length >= 4) out[out.length - 1] += '\n' + paras[i];
+      else out.push(paras[i]);
+    }
+    return out.length ? out : [String(text || '').trim()];
+  }
   function cleanReply(t) {
     t = String(t || '');
     t = t.replace(/<!--[\s\S]*?-->/g, '');
@@ -896,9 +908,14 @@
       var text = (typeof reply === 'string' ? reply : (reply && reply.content) || '').trim();
       text = cleanReply(text);
       if (!text) throw new Error('空回复');
-      pushLog({ who: 'them', pname: p.name, text: text, floor: floor >= 0 ? floor : null, trigger: trigger, ts: Date.now() });
-      renderBody(); scrollBottom();
-      if (!isOpen()) { setUnread(unread + 1); showBubble(p.name, text); }
+      // 0.1.10：按空行拆成几条消息，像真人连发；💡 建议行跟着它前面那条走，不单独成条；最多 4 条
+      var chunks = splitChunks(text);
+      for (var ci = 0; ci < chunks.length; ci++) {
+        if (ci > 0) await sleep(Math.min(1800, 500 + chunks[ci].length * 40));
+        pushLog({ who: 'them', pname: p.name, text: chunks[ci], floor: floor >= 0 ? floor : null, trigger: trigger, ts: Date.now() });
+        renderBody(); scrollBottom();
+        if (!isOpen()) { setUnread(unread + 1); showBubble(p.name, chunks[ci]); }
+      }
     } catch (e) {
       var msg = (e && e.message) || String(e);
       if (/unauthorized|401|403|api key|forbidden/i.test(msg)) msg += '（认证没过 → 去 ⚙ 给小狸填一个独立 API，或先在 Sugar Baby 手机里填好它会自动读）';
