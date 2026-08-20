@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.10';
+  var VERSION = '0.1.11';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -221,6 +221,7 @@
         if (typeof raw.everyN === 'number' && raw.everyN >= 1) settings.everyN = raw.everyN;
         if (Array.isArray(raw.custom)) settings.custom = raw.custom;
         if (raw.pos && typeof raw.pos === 'object') settings.pos = raw.pos;
+        if (raw.panelPos && typeof raw.panelPos === 'object') settings.panelPos = raw.panelPos;
       }
     } catch (e) {}
   }
@@ -338,11 +339,47 @@
       p.style.maxHeight = ''; p.style.maxWidth = '';
       var bx = vpW() - 66, by = vpH() - 200;
       try { var br = DOC.getElementById(NS + '-ball').getBoundingClientRect(); bx = br.left; by = br.top; } catch (e) {}
-      // 面板挂在球的上方靠右；放不下就往里挪
-      var left = Math.max(8, Math.min(bx + 52 - w, vpW() - w - 8));
-      var top = Math.max(8, by - h - 12);
+      // 0.1.11：拖过顶栏就记住位置（只记宽屏；窄屏永远贴顶居中）；没拖过 → 挂在球的上方靠右，放不下就往里挪
+      var left, top;
+      if (settings.panelPos && typeof settings.panelPos.left === 'number') {
+        left = Math.max(4, Math.min(settings.panelPos.left, vpW() - w - 4));
+        top = Math.max(4, Math.min(settings.panelPos.top, vpH() - h - 4));
+      } else {
+        left = Math.max(8, Math.min(bx + 52 - w, vpW() - w - 8));
+        top = Math.max(8, by - h - 12);
+      }
       setClientPos(p, left, top);
     }
+  }
+  // 小窗顶栏拖动：按在顶栏空白处（不是按钮/下拉）就能拖，松手记进 settings.panelPos
+  function bindPanelDrag(panel) {
+    var head = panel.querySelector('.tl-head'); if (!head) return;
+    var sx = 0, sy = 0, ox = 0, oy = 0, dragging = false, moved = false;
+    head.addEventListener('pointerdown', function (e) {
+      if (e.target && e.target.closest && e.target.closest('button,select,input,textarea')) return;
+      if (isNarrow()) return;
+      dragging = true; moved = false;
+      var r = panel.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+      try { head.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    });
+    head.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+      if (!moved) return;
+      var r = panel.getBoundingClientRect();
+      var x = Math.max(4, Math.min(ox + dx, vpW() - r.width - 4));
+      var y = Math.max(4, Math.min(oy + dy, vpH() - r.height - 4));
+      setClientPos(panel, x, y);
+    });
+    function up(e) {
+      if (!dragging) return; dragging = false;
+      try { head.releasePointerCapture(e.pointerId); } catch (err) {}
+      if (moved) { var r = panel.getBoundingClientRect(); settings.panelPos = { left: r.left, top: r.top }; saveSettings(); }
+    }
+    head.addEventListener('pointerup', up);
+    head.addEventListener('pointercancel', function () { dragging = false; });
   }
   function setOpen(open) {
     var p = DOC.getElementById(NS + '-panel'); if (!p) return;
@@ -399,7 +436,7 @@
       '#' + NS + '-panel{position:fixed;right:22px;bottom:214px;width:372px;max-width:calc(100vw - 30px);height:520px;max-height:calc(100vh - 240px);box-sizing:border-box;z-index:2147483599;display:none;flex-direction:column;overflow:hidden;border-radius:18px;',
         'background:rgba(22,24,32,.96);color:#eaeaf0;border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 60px rgba(0,0,0,.55);font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:13px;line-height:1.55;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
       '#' + NS + '-panel *{box-sizing:border-box}',
-      '#' + NS + '-panel .tl-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.05),transparent)}',
+      '#' + NS + '-panel .tl-head{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:grab;touch-action:none;user-select:none;border-bottom:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.05),transparent)}',
       '#' + NS + '-panel .tl-av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;background:' + p.color + ';flex:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}',
       '#' + NS + '-panel .tl-who{flex:1;min-width:0}',
       '#' + NS + '-panel .tl-who select{width:100%;background:transparent;border:0;color:#fff;font-size:14px;font-weight:700;outline:none;cursor:pointer;padding:0;appearance:none;-webkit-appearance:none}',
@@ -497,6 +534,7 @@
       '<div class="tl-foot"><textarea placeholder="问它点什么，或者让它闭嘴…（Enter 发送，Shift+Enter 换行）"></textarea><button class="tl-send">➤</button></div>' +
       '<div class="tl-set"></div>';
     DOC.body.appendChild(panel);
+    bindPanelDrag(panel);
 
     panel.querySelector('.tl-x').addEventListener('click', function () { setOpen(false); });
     panel.querySelector('.tl-gear').addEventListener('click', function () { toggleSettings(); });
@@ -662,7 +700,8 @@
         '<div class="tl-note">拉取 = 连通性测试（拉得到 = 地址/Key/CORS 都通），从列表里选一个再保存。嘴碎的活给便宜模型干就行。</div>' +
       '</div>' +
       '<h4>数据</h4>' +
-      '<div class="tl-row"><button class="tl-btn ghost tl-set-clear">清空 ' + esc(p.name) + ' 在这个聊天里的对话</button></div>' +
+      '<div class="tl-row"><button class="tl-btn ghost tl-set-clear">清空 ' + esc(p.name) + ' 在这个聊天里的对话</button><button class="tl-btn ghost tl-set-resetpos">小窗和球回默认位置</button></div>' +
+      '<div class="tl-note">小窗抓着顶栏就能拖，松手记住位置（手机上不记）。</div>' +
       '<div class="tl-note">v' + VERSION + ' · 酒馆小狸 Live · 它说的话不进主线；只有你点了「采纳」的那一条会以一次性注入塞进下一轮。</div>';
     s.querySelector('.tl-set-x').addEventListener('click', function () { toggleSettings(false); });
     s.querySelector('.tl-set-auto').addEventListener('click', function () { settings.auto = !settings.auto; saveSettings(); renderSettings(); renderHead(); });
@@ -682,6 +721,7 @@
       renderSettings();
     });
     s.querySelector('.tl-set-clear').addEventListener('click', function () { writeLog([]); renderBody(); toast('清空了', 'ok'); });
+    s.querySelector('.tl-set-resetpos').addEventListener('click', function () { settings.pos = null; settings.panelPos = null; saveSettings(); placeBall(); placePanel(); toast('回去了', 'ok'); });
     var kIn = s.querySelector('.tl-api-key'); if (kIn) kIn.addEventListener('focus', function () { kIn.removeAttribute('readonly'); });
     s.querySelector('.tl-api-fetch').addEventListener('click', async function () {
       var btn = this, u = s.querySelector('.tl-api-url').value.trim(), k = s.querySelector('.tl-api-key').value.trim();
