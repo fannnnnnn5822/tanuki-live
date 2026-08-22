@@ -452,8 +452,11 @@
   function css() {
     var p = currentPersona();
     return [
-      '#' + NS + '-ball{position:fixed;right:22px;bottom:150px;width:52px;height:52px;border-radius:50%;box-sizing:border-box;z-index:2147483600;cursor:grab;display:flex;align-items:center;justify-content:center;font-size:24px;user-select:none;touch-action:none;',
-        'background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.35),transparent 60%),' + p.color + ';box-shadow:0 6px 20px rgba(0,0,0,.35),0 0 0 2px rgba(255,255,255,.18) inset;transition:transform .15s}',
+      '#' + NS + '-ball{position:fixed;right:22px;bottom:150px;width:54px;height:54px;box-sizing:border-box;z-index:2147483600;cursor:grab;display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;background:none;border:none;box-shadow:none;filter:drop-shadow(0 6px 13px rgba(0,0,0,.55));transition:transform .2s cubic-bezier(.2,.8,.25,1)}',
+      '#' + NS + '-ball:hover{transform:scale(1.09) rotate(-3deg)}',
+      '#' + NS + '-ball .tl-face{display:block;width:100%;height:100%;animation:tlFloat 4.7s ease-in-out infinite}',
+      '#' + NS + '-ball .tl-face svg{display:block;width:100%;height:100%;overflow:visible}',
+      '@keyframes tlFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}',
       '#' + NS + '-ball:active{cursor:grabbing;transform:scale(.94)}',
       '#' + NS + '-ball .tl-badge{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;border-radius:9px;background:#fff;color:#c0392b;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 1px 4px rgba(0,0,0,.3);font-family:-apple-system,PingFang SC,sans-serif}',
       '#' + NS + '-ball .tl-bubble{position:absolute;bottom:calc(100% + 12px);right:-4px;max-width:min(250px,70vw);width:max-content;padding:8px 12px;border-radius:13px;border-bottom-right-radius:4px;background:rgba(22,24,32,.96);color:#eaeaf0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;text-align:left;cursor:pointer;border:1px solid ' + p.color + ';box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;opacity:0;transform:translateY(6px) scale(.96);transform-origin:bottom right;transition:opacity .18s,transform .18s;pointer-events:none;z-index:1}',
@@ -461,12 +464,13 @@
       '#' + NS + '-ball .tl-bubble::after{content:"";position:absolute;top:100%;right:18px;border:6px solid transparent;border-top-color:' + p.color + '}',
       '#' + NS + '-ball .tl-bubble .tl-bname{display:block;font-size:10.5px;color:' + p.color + ';font-weight:700;margin-bottom:2px}',
       '#' + NS + '-ball.tl-busy{animation:' + NS + '-pulse 1s ease-in-out infinite}',
-      '@keyframes ' + NS + '-pulse{0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.35),0 0 0 2px rgba(255,255,255,.18) inset}50%{box-shadow:0 6px 28px ' + p.color + ',0 0 0 2px rgba(255,255,255,.4) inset}}',
+      '@keyframes ' + NS + '-pulse{0%,100%{filter:drop-shadow(0 6px 13px rgba(0,0,0,.55))}50%{filter:drop-shadow(0 0 10px ' + p.color + ') drop-shadow(0 6px 13px rgba(0,0,0,.55))}}',
       '#' + NS + '-panel{position:fixed;right:22px;bottom:214px;width:372px;max-width:calc(100vw - 30px);height:520px;max-height:calc(100vh - 240px);box-sizing:border-box;z-index:2147483599;display:none;flex-direction:column;overflow:hidden;border-radius:18px;',
         'background:rgba(22,24,32,.96);color:#eaeaf0;border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 60px rgba(0,0,0,.55);font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:13px;line-height:1.55;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
       '#' + NS + '-panel *{box-sizing:border-box}',
       '#' + NS + '-panel .tl-head{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:grab;touch-action:none;user-select:none;border-bottom:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.05),transparent)}',
-      '#' + NS + '-panel .tl-av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;background:' + p.color + ';flex:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}',
+      '#' + NS + '-panel .tl-av{width:36px;height:36px;flex:none;display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,.45))}',
+      '#' + NS + '-panel .tl-av svg{display:block;width:100%;height:100%;overflow:visible}',
       '#' + NS + '-panel .tl-who{flex:1;min-width:0}',
       '#' + NS + '-panel .tl-who select{width:100%;background:transparent;border:0;color:#fff;font-size:14px;font-weight:700;outline:none;cursor:pointer;padding:0;appearance:none;-webkit-appearance:none}',
       '#' + NS + '-panel .tl-who select option{background:#1e2029;color:#eee;font-weight:400}',
@@ -539,13 +543,147 @@
   }
   function setBusy(b) { var ball = DOC.getElementById(NS + '-ball'); if (ball) ball.classList.toggle('tl-busy', !!b); var send = DOC.querySelector('#' + NS + '-panel .tl-send'); if (send) send.disabled = !!b; }
 
+  /* ═══════════════════════════════════════════════════════════════
+     小狸矢量头像 — 一只狸 + 每个人格一套道具
+     球不是「圆片＋emoji」，是一个物件（skill 06 悬浮球四件套第 4 条）。
+     底座恒定＝它始终是同一只小狸；换的是帽子/眼镜/手里的东西。
+     围巾＝人格主色，道具看不清时也能一眼分辨。
+     导入的自定义人格没有道具，落到「素狸＋围巾」，不会坏。
+     ═══════════════════════════════════════════════════════════════ */
+  function tlCap(c) {
+    return '<path d="M32 3.5 L55 12 L32 20.5 L9 12 Z" fill="#2b2b33"/>' +
+      '<path d="M22 16 v5.5 C22 25 42 25 42 21.5 V16" fill="#33333d"/>' +
+      '<path d="M55 12 v8.5" stroke="' + c + '" stroke-width="1.7"/>' +
+      '<circle cx="55" cy="22" r="2.6" fill="' + c + '"/>';
+  }
+
+  var TL_PROP = {
+    akuma: { front:
+      '<g transform="translate(43,1)">' +
+      '<path d="M0 7 h13.5 v4.6 a6.7 6.7 0 0 1 -13.5 0 Z" fill="#f6efe3" stroke="#d8c7ac" stroke-width="1"/>' +
+      '<path d="M13.5 8 a3.6 3.6 0 0 1 0 5.2" fill="none" stroke="#d8c7ac" stroke-width="1.4"/>' +
+      '<path d="M1.6 8.4 h10.3 a5.2 5.2 0 0 1 -10.3 0 Z" fill="#7fb069"/>' +
+      '<path d="M4 4.5 c-1.6 -2 1 -3.2 0 -5.2 M9 4.5 c-1.6 -2 1 -3.2 0 -5.2" stroke="#cfc3ae" stroke-width="1.1" fill="none" stroke-linecap="round"/>' +
+      '</g>' +
+      '<path d="M13 10 c1.7 -2.6 5.2 -.9 3.4 1.8 L13 15.6 L9.6 11.8 C7.8 9.1 11.3 7.4 13 10 Z" fill="#e85d75"/>' },
+
+    lvxing: {
+      behind:
+        '<path d="M23 15 C21 6.5 18 4 15.5 3" stroke="#3ecf8e" stroke-width="2.1" fill="none" stroke-linecap="round"/>' +
+        '<circle cx="15" cy="2.6" r="3.1" fill="#3ecf8e"/>' +
+        '<path d="M41 15 C43 6.5 46 4 48.5 3" stroke="#3ecf8e" stroke-width="2.1" fill="none" stroke-linecap="round"/>' +
+        '<circle cx="49" cy="2.6" r="3.1" fill="#3ecf8e"/>',
+      front:
+        '<g transform="rotate(-22 53 45)"><rect x="46" y="41" width="14" height="7.6" rx="3.8" fill="#5aa651"/>' +
+        '<path d="M48.6 43.8 h8.8" stroke="#9ad894" stroke-width="1.3" stroke-linecap="round"/></g>' },
+
+    writer: { front:
+      '<g transform="rotate(-14 16 12)">' +
+      '<rect x="3" y="6.5" width="25" height="16" rx="2" fill="#26262e"/>' +
+      '<rect x="3" y="1.5" width="25" height="5.4" rx="1.2" fill="#17171d"/>' +
+      '<path d="M6 1.5 l4 5.4 M13 1.5 l4 5.4 M20 1.5 l4 5.4" stroke="#f5f2ea" stroke-width="2.1"/>' +
+      '<path d="M7 12.5 h15 M7 17.5 h9.5" stroke="#5d5d6b" stroke-width="1.5" stroke-linecap="round"/>' +
+      '</g>' },
+
+    shipper: {
+      behind:
+        '<circle cx="14" cy="10" r="6" fill="#ff7eb6" opacity=".5"/>' +
+        '<circle cx="25" cy="4" r="3.6" fill="#ff7eb6" opacity=".4"/>' +
+        '<circle cx="50" cy="8.5" r="4.8" fill="#ff7eb6" opacity=".45"/>',
+      front: '<path d="M14 8.4 c1.7 -2.6 5.2 -.9 3.4 1.8 L14 14 L10.6 10.2 C8.8 7.5 12.3 5.8 14 8.4 Z" fill="#fff" opacity=".92"/>' },
+
+    guide: { front:
+      '<g transform="rotate(-11 17 12)">' +
+      '<path d="M1 6 C6 2.8 12 2.8 17 6 L17 20 C12 16.8 6 16.8 1 20 Z" fill="#f6efe3" stroke="#4a90d9" stroke-width="1.5"/>' +
+      '<path d="M17 6 C22 2.8 28 2.8 33 6 L33 20 C28 16.8 22 16.8 17 20 Z" fill="#f6efe3" stroke="#4a90d9" stroke-width="1.5"/>' +
+      '<path d="M17 6 v14" stroke="#4a90d9" stroke-width="1.5"/></g>' },
+
+    detective: {
+      behind:
+        '<path d="M12 19 C12 7.5 22 2.5 32 2.5 C42 2.5 52 7.5 52 19 Z" fill="#8d7b5f"/>' +
+        '<ellipse cx="7.5" cy="23" rx="5.2" ry="6.4" fill="#7f6e54"/>' +
+        '<ellipse cx="56.5" cy="23" rx="5.2" ry="6.4" fill="#7f6e54"/>' +
+        '<path d="M5 18 h54 v3.4 H5 Z" fill="#6f6049"/>',
+      front:
+        '<circle cx="53" cy="42" r="7.2" fill="rgba(255,255,255,.22)" stroke="#9b59b6" stroke-width="2.3"/>' +
+        '<path d="M58 47.2 l5.2 5.4" stroke="#9b59b6" stroke-width="3.2" stroke-linecap="round"/>' },
+
+    mom: { front:
+      '<circle cx="23.6" cy="30.4" r="7.4" fill="rgba(255,255,255,.22)" stroke="#a9a9b0" stroke-width="2"/>' +
+      '<circle cx="40.4" cy="30.4" r="7.4" fill="rgba(255,255,255,.22)" stroke="#a9a9b0" stroke-width="2"/>' +
+      '<path d="M31 30.4 h2" stroke="#a9a9b0" stroke-width="2"/>' +
+      '<path d="M16.2 28.6 l-4.6 -2.2 M47.8 28.6 l4.6 -2.2" stroke="#a9a9b0" stroke-width="1.9" stroke-linecap="round"/>' },
+
+    trumpu: {
+      behind: '<path d="M9.5 21 C9 6.5 24 .5 34.5 2.5 C46.5 4.8 54.5 10 53.5 20 C48.5 14 44 16.5 40 13 C34 8 21.5 11.5 17.5 18 C14.5 22.5 11.5 25 9.5 21 Z" fill="#e8c86a"/>',
+      front: '<path d="M32 49 l4.4 4 L32 64 L27.6 53 Z" fill="#c0392b"/>' },
+
+    nature: { behind:
+      '<path d="M32 2.5 C40.5 2.5 46 8 46 15.5 H18 C18 8 23.5 2.5 32 2.5 Z" fill="#7d8a5c"/>' +
+      '<ellipse cx="32" cy="17" rx="25" ry="4.8" fill="#6a7650"/>' +
+      '<path d="M9 15 C13 11 18 11 21 14 C17 17 12 17.5 9 15 Z" fill="#5f8c3e"/>' },
+
+    auntie: { behind:
+      '<path d="M10.5 21 C10.5 8 21 2.5 32 2.5 C43 2.5 53.5 8 53.5 21 C46 14.5 18 14.5 10.5 21 Z" fill="#c2703e"/>' +
+      '<path d="M53.5 20 L61.5 26 L51.5 27.5 Z" fill="#a85f34"/>' +
+      '<circle cx="20" cy="10.5" r="1.7" fill="#f4e0c4"/><circle cx="30" cy="7" r="1.7" fill="#f4e0c4"/>' +
+      '<circle cx="41" cy="9.5" r="1.7" fill="#f4e0c4"/><circle cx="47" cy="15" r="1.4" fill="#f4e0c4"/>' },
+
+    owl: { front:
+      '<g transform="translate(43,0)">' +
+      '<ellipse cx="9" cy="11" rx="8.4" ry="9.4" fill="#8a6b3f"/>' +
+      '<path d="M1.6 5 L4.4 .4 L7.6 4 Z M16.4 5 L13.6 .4 L10.4 4 Z" fill="#8a6b3f"/>' +
+      '<circle cx="5.6" cy="10" r="3.2" fill="#f6efe3"/><circle cx="12.4" cy="10" r="3.2" fill="#f6efe3"/>' +
+      '<circle cx="5.9" cy="10.2" r="1.5" fill="#15110d"/><circle cx="12.1" cy="10.2" r="1.5" fill="#15110d"/>' +
+      '<path d="M9 13.2 L6.7 16.4 h4.6 Z" fill="#e0a83c"/></g>' },
+
+    villain: {
+      noScarf: true,
+      front:
+        '<path d="M13 47 L19.5 62 L32 55.5 L44.5 62 L51 47 C44 53.5 20 53.5 13 47 Z" fill="#2c3e50"/>' +
+        '<circle cx="40.4" cy="30.4" r="7.8" fill="rgba(210,225,240,.22)" stroke="#cfd6dd" stroke-width="1.9"/>' +
+        '<path d="M47.6 33.4 L53.5 41.5" stroke="#cfd6dd" stroke-width="1.5"/>' },
+
+    en_teacher: { behind: tlCap('#3b5bdb') },
+    de_teacher: { behind: tlCap('#e03131') }
+  };
+
+  var _tlSvgSeq = 0;
+  function tanukiSvg(p) {
+    var o = TL_PROP[p.id] || {};
+    var k = 'tlf' + (++_tlSvgSeq);
+    var c = p.color || '#9a8067';
+    return '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<defs><linearGradient id="' + k + '" x1=".2" y1="0" x2=".8" y2="1">' +
+      '<stop offset="0" stop-color="#b39a7e"/><stop offset=".6" stop-color="#9a8067"/><stop offset="1" stop-color="#7d6650"/>' +
+      '</linearGradient></defs>' +
+      (o.behind || '') +
+      '<path d="M13 21 C11 10 15 6 21 11 C24 13.5 25.5 17 25.5 20 Z" fill="#7d6650"/>' +
+      '<path d="M51 21 C53 10 49 6 43 11 C40 13.5 38.5 17 38.5 20 Z" fill="#7d6650"/>' +
+      '<path d="M16.5 19 C15.5 12.5 17.5 10.5 20.8 13.5 C22.3 15 23 17 23 19 Z" fill="#cba98d"/>' +
+      '<path d="M47.5 19 C48.5 12.5 46.5 10.5 43.2 13.5 C41.7 15 41 17 41 19 Z" fill="#cba98d"/>' +
+      '<ellipse cx="32" cy="33" rx="21" ry="18.6" fill="url(#' + k + ')"/>' +
+      '<path d="M13.5 28.5 C17.5 22.5 25 22.5 28.5 28 C30.5 31.2 27.5 36.8 22 37.2 C16.5 37.6 12.8 33.5 13.5 28.5 Z" fill="#5d4835"/>' +
+      '<path d="M50.5 28.5 C46.5 22.5 39 22.5 35.5 28 C33.5 31.2 36.5 36.8 42 37.2 C47.5 37.6 51.2 33.5 50.5 28.5 Z" fill="#5d4835"/>' +
+      '<ellipse cx="32" cy="41.5" rx="10.8" ry="7.6" fill="#f6efe3"/>' +
+      '<circle cx="23.6" cy="30.4" r="3.4" fill="#15110d"/><circle cx="24.9" cy="29.1" r="1.25" fill="#fff" opacity=".95"/>' +
+      '<circle cx="40.4" cy="30.4" r="3.4" fill="#15110d"/><circle cx="41.7" cy="29.1" r="1.25" fill="#fff" opacity=".95"/>' +
+      '<path d="M28.9 37.6 C30.6 35.9 33.4 35.9 35.1 37.6 C33.9 39.9 30.1 39.9 28.9 37.6 Z" fill="#2b2320"/>' +
+      '<path d="M32 39.6 v1.8" stroke="#2b2320" stroke-width="1.15" stroke-linecap="round"/>' +
+      '<path d="M32 41.4 C30.5 43.4 28.4 42.8 27.6 41.4" stroke="#2b2320" stroke-width="1.15" fill="none" stroke-linecap="round"/>' +
+      '<path d="M32 41.4 C33.5 43.4 35.6 42.8 36.4 41.4" stroke="#2b2320" stroke-width="1.15" fill="none" stroke-linecap="round"/>' +
+      (o.noScarf ? '' : '<path d="M15.5 47.5 C22 53.5 42 53.5 48.5 47.5 C47.5 54 40 58.5 32 58.5 C24 58.5 16.5 54 15.5 47.5 Z" fill="' + c + '"/>') +
+      (o.front || '') +
+      '</svg>';
+  }
+
   function mount() {
     if (mounted) return;
     unmount();
     var st = DOC.createElement('style'); st.id = NS + '-style'; st.textContent = css(); DOC.head.appendChild(st);
 
     var ball = DOC.createElement('div'); ball.id = NS + '-ball'; ball.title = '酒馆小狸 Live v' + VERSION;
-    ball.innerHTML = '<span class="tl-face">' + currentPersona().emoji + '</span><span class="tl-badge"></span><div class="tl-bubble"></div>';
+    ball.innerHTML = '<span class="tl-face">' + tanukiSvg(currentPersona()) + '</span><span class="tl-badge"></span><div class="tl-bubble"></div>';
     DOC.body.appendChild(ball);
     bindDrag(ball);
 
@@ -625,12 +763,12 @@
   function renderHead() {
     var panel = DOC.getElementById(NS + '-panel'); if (!panel) return;
     var p = currentPersona();
-    panel.querySelector('.tl-av').textContent = p.emoji;
+    panel.querySelector('.tl-av').innerHTML = tanukiSvg(p);
     var sel = panel.querySelector('.tl-sel');
     sel.innerHTML = allPersonas().map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === p.id ? ' selected' : '') + '>' + esc(x.emoji + ' ' + x.name) + '</option>'; }).join('');
     panel.querySelector('.tl-tag').textContent = p.tag || p.watches || '';
     panel.querySelector('.tl-auto').classList.toggle('on', !!settings.auto);
-    var face = DOC.querySelector('#' + NS + '-ball .tl-face'); if (face) face.textContent = p.emoji;
+    var face = DOC.querySelector('#' + NS + '-ball .tl-face'); if (face) face.innerHTML = tanukiSvg(p);
     restyle();
   }
 
