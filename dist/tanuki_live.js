@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.21';
+  var VERSION = '0.1.22';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -557,14 +557,15 @@
       '#' + NS + '-ball .tl-bubble .tl-bname{display:block;font-size:10.5px;color:' + p.color + ';font-weight:700;margin-bottom:2px}',
       '#' + NS + '-ball.tl-busy{animation:' + NS + '-pulse 1s ease-in-out infinite}',
       '@keyframes ' + NS + '-pulse{0%,100%{filter:drop-shadow(0 6px 13px rgba(0,0,0,.55))}50%{filter:drop-shadow(0 0 10px ' + p.color + ') drop-shadow(0 6px 13px rgba(0,0,0,.55))}}',
-      '#' + NS + '-panel{position:fixed;right:22px;bottom:214px;width:372px;max-width:calc(100vw - 30px);height:520px;max-height:calc(100vh - 240px);box-sizing:border-box;z-index:2147483599;display:none;flex-direction:column;overflow:hidden;border-radius:18px;',
+      '#' + NS + '-panel{position:fixed;right:22px;bottom:214px;width:372px;max-width:calc(100vw - 30px);height:520px;max-height:calc(100vh - 240px);box-sizing:border-box;z-index:2147483599;display:none;flex-direction:column;overflow:hidden;border-radius:18px;color-scheme:dark;',
         'background:rgba(22,24,32,.96);color:#eaeaf0;border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 60px rgba(0,0,0,.55);font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:13px;line-height:1.55;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
       '#' + NS + '-panel *{box-sizing:border-box}',
       '#' + NS + '-panel .tl-head{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:grab;touch-action:none;user-select:none;border-bottom:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.05),transparent)}',
       '#' + NS + '-panel .tl-av{width:36px;height:36px;flex:none;display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,.45))}',
       '#' + NS + '-panel .tl-av svg{display:block;width:100%;height:100%;overflow:visible}',
       '#' + NS + '-panel .tl-who{flex:1;min-width:0}',
-      '#' + NS + '-panel .tl-who select{width:100%;background:transparent;border:0;color:#fff;font-size:14px;font-weight:700;outline:none;cursor:pointer;padding:0;appearance:none;-webkit-appearance:none}',
+      // 0.1.22：安卓 WebView 会用系统样式把 select/textarea 刷成白底白字（玩家截图三处发白），这里全部 !important 压死 + color-scheme:dark
+      '#' + NS + '-panel .tl-who select{width:100%;background:transparent !important;background-color:transparent !important;border:0;color:#fff !important;-webkit-text-fill-color:#fff;font-size:14px;font-weight:700;outline:none;cursor:pointer;padding:0;appearance:none !important;-webkit-appearance:none !important;box-shadow:none}',
       '#' + NS + '-panel .tl-who select option{background:#1e2029;color:#eee;font-weight:400}',
       '#' + NS + '-panel .tl-tag{font-size:10.5px;color:rgba(255,255,255,.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '#' + NS + '-panel .tl-ib{width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#ddd;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none;padding:0}',
@@ -581,7 +582,7 @@
       '#' + NS + '-panel .tl-sug button{flex:none;border:0;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;background:' + p.color + ';color:#fff;font-weight:600}',
       '#' + NS + '-panel .tl-sug button:disabled{opacity:.45;cursor:default}',
       '#' + NS + '-panel .tl-foot{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.08);align-items:flex-end}',
-      '#' + NS + '-panel textarea{flex:1;min-height:38px;max-height:110px;resize:none;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;padding:9px 11px;font:inherit;outline:none;line-height:1.4}',
+      '#' + NS + '-panel textarea{flex:1;min-height:38px;max-height:110px;resize:none;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06) !important;background-color:rgba(255,255,255,.06) !important;color:#fff !important;-webkit-text-fill-color:#fff;padding:9px 11px;font:inherit;outline:none;line-height:1.4;appearance:none;-webkit-appearance:none;box-shadow:none}',
       '#' + NS + '-panel textarea:focus{border-color:' + p.color + '}',
       '#' + NS + '-panel .tl-send{width:38px;height:38px;border-radius:11px;border:0;background:' + p.color + ';color:#fff;cursor:pointer;font-size:15px;flex:none;display:flex;align-items:center;justify-content:center}',
       '#' + NS + '-panel .tl-send:disabled{opacity:.5;cursor:default}',
@@ -592,7 +593,7 @@
       '#' + NS + '-panel .tl-set .tl-step{display:inline-flex;align-items:center;gap:2px}',
       '#' + NS + '-panel .tl-set .tl-step .tl-pill{padding:3px 12px;font-size:15px;line-height:1}',
       '#' + NS + '-panel .tl-set .tl-step b{min-width:34px;text-align:center;color:#fff;font-size:14px}',
-      '#' + NS + '-panel .tl-set input[type=text],#' + NS + '-panel .tl-set textarea.tl-ta{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;-webkit-text-fill-color:#fff;border-radius:9px;padding:8px 10px;font:inherit;outline:none;resize:vertical}',
+      '#' + NS + '-panel .tl-set input[type=text],#' + NS + '-panel .tl-set textarea.tl-ta,#' + NS + '-panel .tl-set select{width:100%;background:rgba(255,255,255,.08) !important;background-color:rgba(255,255,255,.08) !important;border:1px solid rgba(255,255,255,.12);color:#fff !important;-webkit-text-fill-color:#fff;border-radius:9px;padding:8px 10px;font:inherit;outline:none;resize:vertical;appearance:none;-webkit-appearance:none;box-shadow:none}',
       '#' + NS + '-panel .tl-set textarea.tl-ta{min-height:90px;max-height:none}',
       '#' + NS + '-panel .tl-set .tl-note{font-size:11px;color:rgba(255,255,255,.4);line-height:1.5}',
       '#' + NS + '-panel .tl-set .tl-row{display:flex;gap:6px;flex-wrap:wrap}',
