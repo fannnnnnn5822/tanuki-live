@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.20';
+  var VERSION = '0.1.21';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -589,8 +589,10 @@
       '#' + NS + '-panel .tl-set.open{display:flex}',
       '#' + NS + '-panel .tl-set h4{margin:0;font-size:13px;color:#fff;display:flex;align-items:center;justify-content:space-between}',
       '#' + NS + '-panel .tl-set label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:rgba(255,255,255,.8);padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05)}',
-      '#' + NS + '-panel .tl-set input[type=number]{width:56px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:7px;padding:4px 6px;font:inherit}',
-      '#' + NS + '-panel .tl-set input[type=text],#' + NS + '-panel .tl-set textarea.tl-ta{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:9px;padding:8px 10px;font:inherit;outline:none;resize:vertical}',
+      '#' + NS + '-panel .tl-set .tl-step{display:inline-flex;align-items:center;gap:2px}',
+      '#' + NS + '-panel .tl-set .tl-step .tl-pill{padding:3px 12px;font-size:15px;line-height:1}',
+      '#' + NS + '-panel .tl-set .tl-step b{min-width:34px;text-align:center;color:#fff;font-size:14px}',
+      '#' + NS + '-panel .tl-set input[type=text],#' + NS + '-panel .tl-set textarea.tl-ta{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;-webkit-text-fill-color:#fff;border-radius:9px;padding:8px 10px;font:inherit;outline:none;resize:vertical}',
       '#' + NS + '-panel .tl-set textarea.tl-ta{min-height:90px;max-height:none}',
       '#' + NS + '-panel .tl-set .tl-note{font-size:11px;color:rgba(255,255,255,.4);line-height:1.5}',
       '#' + NS + '-panel .tl-set .tl-row{display:flex;gap:6px;flex-wrap:wrap}',
@@ -945,7 +947,7 @@
     s.innerHTML =
       '<h4>设置 <button class="tl-ib tl-set-x">✕</button></h4>' +
       '<label>自动弹幕 <button class="tl-pill tl-set-auto ' + (settings.auto ? 'on' : '') + '">' + (settings.auto ? '开' : '关') + '</button></label>' +
-      '<label>每几层说一次 <input type="number" min="1" max="20" class="tl-set-n" value="' + settings.everyN + '"></label>' +
+      '<label>每几层说一次 <span class="tl-step"><button class="tl-pill tl-set-nm">−</button><b class="tl-set-nv">' + settings.everyN + '</b><button class="tl-pill tl-set-np">＋</button></span></label>' +
       '<div class="tl-note">开着自动的话，正文每出来 N 回合它就自己说两句。1 = 每回合。它一开口就多一次 LLM 调用（用你当前的 API 和模型，不走你的预设）。</div>' +
       '<label>球上冒气泡 <button class="tl-pill tl-set-bubble ' + (settings.bubble ? 'on' : '') + '">' + (settings.bubble ? '开' : '关') + '</button></label>' +
       '<label>点「采纳」之后 <span class="tl-row">' +
@@ -987,7 +989,10 @@
     s.querySelector('.tl-set-auto').addEventListener('click', function () { settings.auto = !settings.auto; saveSettings(); renderSettings(); renderHead(); });
     s.querySelector('.tl-set-bubble').addEventListener('click', function () { settings.bubble = !settings.bubble; saveSettings(); if (!settings.bubble) hideBubble(); renderSettings(); });
     s.querySelectorAll('.tl-set-adopt').forEach(function (b) { b.addEventListener('click', function () { settings.adoptMode = this.getAttribute('data-mode') === 'input' ? 'input' : 'inject'; saveSettings(); renderSettings(); }); });
-    s.querySelector('.tl-set-n').addEventListener('change', function () { var n = parseInt(this.value, 10); if (n >= 1 && n <= 20) { settings.everyN = n; saveSettings(); } });
+    // 安卓 WebView 的 number 输入框会把数字渲染没（玩家报的），改成 −/＋ 步进，数字是普通文字
+    function stepN(d) { var n = Math.min(20, Math.max(1, (settings.everyN || 1) + d)); if (n === settings.everyN) return; settings.everyN = n; saveSettings(); s.querySelector('.tl-set-nv').textContent = n; }
+    s.querySelector('.tl-set-nm').addEventListener('click', function () { stepN(-1); });
+    s.querySelector('.tl-set-np').addEventListener('click', function () { stepN(1); });
     s.querySelectorAll('.tl-set-p').forEach(function (b) { b.addEventListener('click', function () { switchPersona(this.getAttribute('data-id')); renderSettings(); }); });
     var del = s.querySelector('.tl-set-del'); if (del) del.addEventListener('click', function () {
       settings.custom = (settings.custom || []).filter(function (x) { return x.id !== p.id; });
