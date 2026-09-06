@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.19';
+  var VERSION = '0.1.20';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -308,7 +308,7 @@
   /* ================================================================
      设置 & 存储
      ================================================================ */
-  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, custom: [], pos: null };
+  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, adoptMode: 'inject', custom: [], pos: null };
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
   var API_KEY_LS = NS + '-api';
@@ -339,6 +339,7 @@
         if (typeof raw.auto === 'boolean') settings.auto = raw.auto;
         if (typeof raw.bubble === 'boolean') settings.bubble = raw.bubble;
         if (typeof raw.everyN === 'number' && raw.everyN >= 1) settings.everyN = raw.everyN;
+        if (raw.adoptMode === 'inject' || raw.adoptMode === 'input') settings.adoptMode = raw.adoptMode;
         if (Array.isArray(raw.custom)) settings.custom = raw.custom;
         if (raw.pos && typeof raw.pos === 'object') settings.pos = raw.pos;
         if (raw.panelPos && typeof raw.panelPos === 'object') settings.panelPos = raw.panelPos;
@@ -947,6 +948,11 @@
       '<label>每几层说一次 <input type="number" min="1" max="20" class="tl-set-n" value="' + settings.everyN + '"></label>' +
       '<div class="tl-note">开着自动的话，正文每出来 N 回合它就自己说两句。1 = 每回合。它一开口就多一次 LLM 调用（用你当前的 API 和模型，不走你的预设）。</div>' +
       '<label>球上冒气泡 <button class="tl-pill tl-set-bubble ' + (settings.bubble ? 'on' : '') + '">' + (settings.bubble ? '开' : '关') + '</button></label>' +
+      '<label>点「采纳」之后 <span class="tl-row">' +
+        '<button class="tl-pill tl-set-adopt ' + (settings.adoptMode !== 'input' ? 'on' : '') + '" data-mode="inject">悄悄注入下一轮</button>' +
+        '<button class="tl-pill tl-set-adopt ' + (settings.adoptMode === 'input' ? 'on' : '') + '" data-mode="input">填进输入框</button>' +
+      '</span></label>' +
+      '<div class="tl-note">注入＝它的主意作为幕后提示塞给 AI 一次，用完自动撤，你的消息里看不到。填进输入框＝那句话原样填进酒馆输入框，你改完自己发。</div>' +
       '<div class="tl-note">小窗收着的时候，它说的话直接冒在悬浮球顶上，几秒后自己缩回去；点气泡展开小窗看全文。关掉就只留红点。</div>' +
       '<h4>人格</h4>' +
       '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-p ' + (x.id === p.id ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + x.name) + '</button>'; }).join('') + '</div>' +
@@ -976,10 +982,11 @@
       '<h4>数据</h4>' +
       '<div class="tl-row"><button class="tl-btn ghost tl-set-clear">清空 ' + esc(p.name) + ' 在这个聊天里的对话</button><button class="tl-btn ghost tl-set-resetpos">小窗和球回默认位置</button></div>' +
       '<div class="tl-note">小窗抓着顶栏就能拖，松手记住位置（手机上不记）。</div>' +
-      '<div class="tl-note">v' + VERSION + ' · 酒馆小狸 Live · 它说的话不进主线；只有你点了「采纳」的那一条会以一次性注入塞进下一轮。</div>';
+      '<div class="tl-note">v' + VERSION + ' · 酒馆小狸 Live · 它说的话不进主线；只有你点了「采纳」的那一条会进下一轮（注入或填进输入框，上面选）。</div>';
     s.querySelector('.tl-set-x').addEventListener('click', function () { toggleSettings(false); });
     s.querySelector('.tl-set-auto').addEventListener('click', function () { settings.auto = !settings.auto; saveSettings(); renderSettings(); renderHead(); });
     s.querySelector('.tl-set-bubble').addEventListener('click', function () { settings.bubble = !settings.bubble; saveSettings(); if (!settings.bubble) hideBubble(); renderSettings(); });
+    s.querySelectorAll('.tl-set-adopt').forEach(function (b) { b.addEventListener('click', function () { settings.adoptMode = this.getAttribute('data-mode') === 'input' ? 'input' : 'inject'; saveSettings(); renderSettings(); }); });
     s.querySelector('.tl-set-n').addEventListener('change', function () { var n = parseInt(this.value, 10); if (n >= 1 && n <= 20) { settings.everyN = n; saveSettings(); } });
     s.querySelectorAll('.tl-set-p').forEach(function (b) { b.addEventListener('click', function () { switchPersona(this.getAttribute('data-id')); renderSettings(); }); });
     var del = s.querySelector('.tl-set-del'); if (del) del.addEventListener('click', function () {
@@ -1250,20 +1257,31 @@
 
   // 采纳：把某条 💡 以一次性注入塞进下一轮
   var ADOPT_ID = NS + '-adopt';
+  // 两种采纳方式（设置里选，玩家点的）：inject＝悄悄一次性注入下一轮（默认）；input＝填进酒馆输入框，玩家自己改改再发
   function adopt(logIdx, sugIdx, btn) {
     var log = readLog(); var m = log[logIdx]; if (!m) return;
     var sugs = splitSuggestions(m.text).sugs; var s = sugs[sugIdx]; if (!s) return;
     var p = currentPersona();
-    var content = '[幕后提示（来自玩家，不要复述、不要提及本段本身）：接下来的剧情请自然地朝这个方向推进——' + s + ']';
     try {
-      uninjectPrompts([ADOPT_ID]);
-      injectPrompts([{ id: ADOPT_ID, position: 'in_chat', depth: 0, role: 'system', content: content, should_scan: false }], { once: true });
+      if (settings.adoptMode === 'input') {
+        var ta = DOC.getElementById('send_textarea');
+        if (!ta) { toast('找不到酒馆输入框', 'error'); return; }
+        ta.value = (ta.value && ta.value.trim()) ? ta.value.replace(/\s+$/, '') + '\n' + s : s;
+        ta.dispatchEvent(new VIEW.Event('input', { bubbles: true }));
+        ta.focus();
+        toast('💡 填进输入框了，改改再发', 'ok');
+        if (isNarrow()) setOpen(false);
+      } else {
+        var content = '[幕后提示（来自玩家，不要复述、不要提及本段本身）：接下来的剧情请自然地朝这个方向推进——' + s + ']';
+        uninjectPrompts([ADOPT_ID]);
+        injectPrompts([{ id: ADOPT_ID, position: 'in_chat', depth: 0, role: 'system', content: content, should_scan: false }], { once: true });
+        toast('💡 塞进下一轮了：' + s.slice(0, 30), 'ok');
+      }
       m.adopted = m.adopted || {}; m.adopted[sugIdx] = true; writeLog(log);
       if (btn) { btn.disabled = true; btn.textContent = '已采纳'; }
-      toast('💡 塞进下一轮了：' + s.slice(0, 30), 'ok');
       pushLog({ who: 'sys', text: '采纳了 ' + p.name + ' 的主意：' + s, ts: Date.now() });
       renderBody(); scrollBottom();
-    } catch (e) { toast('注入失败：' + (e.message || e), 'error'); }
+    } catch (e) { toast('采纳失败：' + (e.message || e), 'error'); }
   }
 
   /* ================================================================
