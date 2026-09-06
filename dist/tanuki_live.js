@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.22';
+  var VERSION = '0.1.23';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -308,7 +308,7 @@
   /* ================================================================
      设置 & 存储
      ================================================================ */
-  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, adoptMode: 'inject', custom: [], pos: null };
+  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, adoptMode: 'inject', snap: true, custom: [], pos: null };
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
   var API_KEY_LS = NS + '-api';
@@ -338,6 +338,7 @@
         if (typeof raw.persona === 'string') settings.persona = raw.persona;
         if (typeof raw.auto === 'boolean') settings.auto = raw.auto;
         if (typeof raw.bubble === 'boolean') settings.bubble = raw.bubble;
+        if (typeof raw.snap === 'boolean') settings.snap = raw.snap;
         if (typeof raw.everyN === 'number' && raw.everyN >= 1) settings.everyN = raw.everyN;
         if (raw.adoptMode === 'inject' || raw.adoptMode === 'input') settings.adoptMode = raw.adoptMode;
         if (Array.isArray(raw.custom)) settings.custom = raw.custom;
@@ -443,6 +444,31 @@
       var c = clampXY(settings.pos.left, settings.pos.top); setClientPos(b, c.x, c.y); return;
     }
     setClientPos(b, vpW() - 66, Math.max(60, (isNarrow() ? inputTop() : vpH()) - 200));
+    snapSoon(400);
+  }
+  /* 贴边半藏（0.1.23，从 Asu-02 抄的，玩家飛鳥提的）：手机上球靠着左右边几秒没人碰 → 半藏进边里 + 半透明；点它/冒气泡/开窗出来。电脑不贴 */
+  var snapTimer = null;
+  function edgeSide() {
+    var b = DOC.getElementById(NS + '-ball'); if (!b) return '';
+    var r = b.getBoundingClientRect(); var cx = r.left + r.width / 2;
+    if (cx < 70) return 'l';
+    if (cx > vpW() - 70) return 'r';
+    return '';
+  }
+  function snapNow() {
+    if (!settings.snap || isOpen() || !isNarrow()) return;
+    var b = DOC.getElementById(NS + '-ball'); if (!b) return;
+    if (b.querySelector('.tl-bubble.on')) return;
+    var side = edgeSide(); if (!side) return;
+    b.classList.remove('tl-snap-l', 'tl-snap-r'); b.classList.add('tl-snap-' + side);
+  }
+  function unsnap() {
+    var b = DOC.getElementById(NS + '-ball'); if (b) b.classList.remove('tl-snap-l', 'tl-snap-r');
+    if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+  }
+  function snapSoon(ms) {
+    if (snapTimer) clearTimeout(snapTimer);
+    snapTimer = setTimeout(function () { snapTimer = null; snapNow(); }, ms || 3000);
   }
   function placePanel() {
     var p = DOC.getElementById(NS + '-panel'); if (!p) return;
@@ -504,9 +530,10 @@
   }
   function setOpen(open) {
     var p = DOC.getElementById(NS + '-panel'); if (!p) return;
-    if (!open) { p.style.display = 'none'; p.style.transform = ''; return; }
+    if (!open) { p.style.display = 'none'; p.style.transform = ''; snapSoon(2500); return; }
     p.style.display = 'flex';
     hideBubble();
+    unsnap();
     placePanel();
     renderAll();
     scrollBottom();
@@ -546,6 +573,10 @@
     return [
       '#' + NS + '-ball{position:fixed;right:22px;bottom:150px;width:54px;height:54px;box-sizing:border-box;z-index:2147483600;cursor:grab;display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;background:none;border:none;box-shadow:none;filter:drop-shadow(0 6px 13px rgba(0,0,0,.55));transition:transform .2s cubic-bezier(.2,.8,.25,1)}',
       '#' + NS + '-ball:hover{transform:scale(1.09) rotate(-3deg)}',
+      '#' + NS + '-ball.tl-snap-r{transform:translateX(52%);opacity:.5}',
+      '#' + NS + '-ball.tl-snap-l{transform:translateX(-52%);opacity:.5}',
+      '#' + NS + '-ball.tl-snap-r .tl-badge{right:auto;left:-3px}',
+      '#' + NS + '-ball.tl-snap-r .tl-bubble{right:auto;left:-4px;border-bottom-right-radius:13px;border-bottom-left-radius:4px;transform-origin:bottom left}',
       '#' + NS + '-ball .tl-face{display:block;width:100%;height:100%;animation:tlFloat 4.7s ease-in-out infinite}',
       '#' + NS + '-ball .tl-face svg{display:block;width:100%;height:100%;overflow:visible}',
       '@keyframes tlFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}',
@@ -622,7 +653,7 @@
   }
   // 气泡：面板关着时自动弹幕直接冒在球顶上（学的桌宠戳戳），点气泡展开面板，不点自己缩回
   var bubbleTimer = null;
-  function hideBubble() { var b = DOC.querySelector('#' + NS + '-ball .tl-bubble'); if (b) b.classList.remove('on'); if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; } }
+  function hideBubble() { var b = DOC.querySelector('#' + NS + '-ball .tl-bubble'); if (b) b.classList.remove('on'); if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; } snapSoon(2500); }
   function showBubble(name, text) {
     if (!settings.bubble) return;
     var ball = DOC.getElementById(NS + '-ball'); if (!ball) return;
@@ -632,6 +663,7 @@
     console.log('[小狸Live] bubble', name, short.slice(0, 20));
     if (short.length > 72) short = short.slice(0, 72) + '…';
     b.innerHTML = '<span class="tl-bname">' + esc(name) + '</span>' + esc(short);
+    unsnap();
     b.classList.add('on');
     if (bubbleTimer) clearTimeout(bubbleTimer);
     bubbleTimer = setTimeout(hideBubble, Math.min(12000, 3500 + short.length * 90));
@@ -847,6 +879,7 @@
     var sx = 0, sy = 0, ox = 0, oy = 0, moved = false, dragging = false;
     ball.addEventListener('pointerdown', function (e) {
       if (e.target && e.target.closest && e.target.closest('.tl-bubble')) { e.preventDefault(); hideBubble(); setOpen(true); setUnread(0); return; }
+      unsnap();
       dragging = true; moved = false;
       var r = ball.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
       try { ball.setPointerCapture(e.pointerId); } catch (err) {}
@@ -863,11 +896,11 @@
     function up(e) {
       if (!dragging) return; dragging = false;
       try { ball.releasePointerCapture(e.pointerId); } catch (err) {}
-      if (moved) { var r = ball.getBoundingClientRect(); if (!isNarrow()) { settings.pos = { left: r.left, top: r.top }; saveSettings(); } }
+      if (moved) { var r = ball.getBoundingClientRect(); if (!isNarrow()) { settings.pos = { left: r.left, top: r.top }; saveSettings(); } snapSoon(1500); }
       else { setOpen(!isOpen()); if (isOpen()) setUnread(0); }
     }
     ball.addEventListener('pointerup', up);
-    ball.addEventListener('pointercancel', function () { dragging = false; });
+    ball.addEventListener('pointercancel', function () { dragging = false; snapSoon(1500); });
     ball.addEventListener('click', function (e) { e.preventDefault(); }); // 交给 pointerup
   }
 
@@ -951,6 +984,8 @@
       '<label>每几层说一次 <span class="tl-step"><button class="tl-pill tl-set-nm">−</button><b class="tl-set-nv">' + settings.everyN + '</b><button class="tl-pill tl-set-np">＋</button></span></label>' +
       '<div class="tl-note">开着自动的话，正文每出来 N 回合它就自己说两句。1 = 每回合。它一开口就多一次 LLM 调用（用你当前的 API 和模型，不走你的预设）。</div>' +
       '<label>球上冒气泡 <button class="tl-pill tl-set-bubble ' + (settings.bubble ? 'on' : '') + '">' + (settings.bubble ? '开' : '关') + '</button></label>' +
+      '<label>球贴边半藏（手机） <button class="tl-pill tl-set-snap ' + (settings.snap ? 'on' : '') + '">' + (settings.snap ? '开' : '关') + '</button></label>' +
+      '<div class="tl-note">只在手机上生效：球靠着屏幕左右边几秒没人碰，就半藏进边里变半透明，不占地方；点它、冒气泡、开窗都会出来。电脑上不贴。</div>' +
       '<label>点「采纳」之后 <span class="tl-row">' +
         '<button class="tl-pill tl-set-adopt ' + (settings.adoptMode !== 'input' ? 'on' : '') + '" data-mode="inject">悄悄注入下一轮</button>' +
         '<button class="tl-pill tl-set-adopt ' + (settings.adoptMode === 'input' ? 'on' : '') + '" data-mode="input">填进输入框</button>' +
@@ -989,6 +1024,7 @@
     s.querySelector('.tl-set-x').addEventListener('click', function () { toggleSettings(false); });
     s.querySelector('.tl-set-auto').addEventListener('click', function () { settings.auto = !settings.auto; saveSettings(); renderSettings(); renderHead(); });
     s.querySelector('.tl-set-bubble').addEventListener('click', function () { settings.bubble = !settings.bubble; saveSettings(); if (!settings.bubble) hideBubble(); renderSettings(); });
+    s.querySelector('.tl-set-snap').addEventListener('click', function () { settings.snap = !settings.snap; saveSettings(); if (!settings.snap) unsnap(); else snapSoon(500); renderSettings(); });
     s.querySelectorAll('.tl-set-adopt').forEach(function (b) { b.addEventListener('click', function () { settings.adoptMode = this.getAttribute('data-mode') === 'input' ? 'input' : 'inject'; saveSettings(); renderSettings(); }); });
     // 安卓 WebView 的 number 输入框会把数字渲染没（玩家报的），改成 −/＋ 步进，数字是普通文字
     function stepN(d) { var n = Math.min(20, Math.max(1, (settings.everyN || 1) + d)); if (n === settings.everyN) return; settings.everyN = n; saveSettings(); s.querySelector('.tl-set-nv').textContent = n; }
@@ -1360,6 +1396,7 @@
     }
     if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
     if (kvTimer) { clearTimeout(kvTimer); kvTimer = null; }
+    if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
     try { uninjectPrompts([ADOPT_ID]); } catch (e) {}
     if (VIEW[INSTANCE_KEY] === cleanup) VIEW[INSTANCE_KEY] = null;
     console.log('[小狸Live] 收拾干净走了');
