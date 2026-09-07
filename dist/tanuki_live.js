@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.23';
+  var VERSION = '0.1.24';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -996,6 +996,18 @@
       '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-p ' + (x.id === p.id ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + x.name) + '</button>'; }).join('') + '</div>' +
       '<div class="tl-note">' + esc(p.tag || '') + (p.watches ? ' · 盯：' + esc(p.watches) : '') + '</div>' +
       (p.custom ? '<button class="tl-pill del tl-set-del">删除这个导入的人格</button>' : '') +
+      // 0.1.24（玩家提的）：导入的人格能看到、能改它的提示词；内置的只能看，想微调就复制成自己的再改（直接改内置会被更新冲掉）
+      (p.custom
+        ? '<h4>改 ' + esc(p.name) + ' 的提示词</h4>' +
+          '<div class="tl-note">下面就是它每次开口前读的那段话，原样发给模型。改完点保存，下一句起生效。名字和头像也能改。</div>' +
+          '<input type="text" class="tl-ed-name" value="' + esc(p.name) + '" placeholder="名字">' +
+          '<input type="text" class="tl-ed-emoji" value="' + esc(p.emoji) + '" placeholder="emoji">' +
+          '<textarea class="tl-ta tl-ed-voice" style="min-height:200px">' + esc(p.voice) + '</textarea>' +
+          '<div class="tl-row"><button class="tl-btn tl-ed-save">💾 保存</button></div>'
+        : '<h4>看 ' + esc(p.name) + ' 的提示词</h4>' +
+          '<div class="tl-note">内置人格的提示词只能看，直接改会被下次更新冲掉。想微调就复制成你自己的人格，改那份。</div>' +
+          '<textarea class="tl-ta tl-ed-voice" readonly style="min-height:120px">' + esc(p.voice) + '</textarea>' +
+          '<div class="tl-row"><button class="tl-btn ghost tl-ed-copy">复制成我的人格再改</button></div>') +
       '<h4>导入一个人格</h4>' +
       '<div class="tl-note">把任何角色请出故事，让 ta 坐到你旁边一起看。名字 + 一段 ta 是谁/怎么说话（可以直接贴世界书条目或角色描述，会被折射成"第四面墙外的 ta"）。</div>' +
       '<input type="text" class="tl-imp-name" placeholder="名字，比如：卫疏影">' +
@@ -1031,6 +1043,20 @@
     s.querySelector('.tl-set-nm').addEventListener('click', function () { stepN(-1); });
     s.querySelector('.tl-set-np').addEventListener('click', function () { stepN(1); });
     s.querySelectorAll('.tl-set-p').forEach(function (b) { b.addEventListener('click', function () { switchPersona(this.getAttribute('data-id')); renderSettings(); }); });
+    var edSave = s.querySelector('.tl-ed-save'); if (edSave) edSave.addEventListener('click', function () {
+      var name = s.querySelector('.tl-ed-name').value.trim(), emoji = s.querySelector('.tl-ed-emoji').value.trim(), voice = s.querySelector('.tl-ed-voice').value.trim();
+      if (!name || !voice) { toast('名字和提示词都不能空', 'warn'); return; }
+      (settings.custom || []).forEach(function (x) { if (x.id === p.id) { x.name = name; x.emoji = emoji || x.emoji || '🎭'; x.voice = voice; } });
+      saveSettings(); renderAll(); renderSettings(); toast('存好了，下一句起生效', 'ok');
+    });
+    var edCopy = s.querySelector('.tl-ed-copy'); if (edCopy) edCopy.addEventListener('click', function () {
+      var id = 'c_' + Date.now().toString(36);
+      settings.custom = settings.custom || [];
+      settings.custom.push({ id: id, name: p.name + '（改）', emoji: p.emoji, color: p.color, tag: '导入 · 改自 ' + p.name, voice: p.voice, watches: p.watches || '', custom: true });
+      settings.persona = id; saveSettings();
+      pushLog({ who: 'sys', text: p.emoji + ' ' + p.name + '（改）坐下了，提示词在设置里随便改。', ts: Date.now() });
+      renderAll(); renderSettings(); toast('复制好了，往下翻改它的提示词', 'ok');
+    });
     var del = s.querySelector('.tl-set-del'); if (del) del.addEventListener('click', function () {
       settings.custom = (settings.custom || []).filter(function (x) { return x.id !== p.id; });
       settings.persona = BUILTIN[0].id; saveSettings(); renderSettings(); renderAll(); toast('已请走 ' + p.name, 'warn');
