@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.25';
+  var VERSION = '0.1.26';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -343,6 +343,7 @@
         if (raw.adoptMode === 'inject' || raw.adoptMode === 'input') settings.adoptMode = raw.adoptMode;
         if (Array.isArray(raw.custom)) settings.custom = raw.custom;
         if (raw.pos && typeof raw.pos === 'object') settings.pos = raw.pos;
+        if (raw.posNarrow && typeof raw.posNarrow === 'object') settings.posNarrow = raw.posNarrow;
         if (raw.panelPos && typeof raw.panelPos === 'object') settings.panelPos = raw.panelPos;
       }
     } catch (e) {}
@@ -437,11 +438,14 @@
   }
   function inputTop() { try { var sf = DOC.getElementById('send_form') || DOC.getElementById('form_sheld'); if (sf) { var r = sf.getBoundingClientRect(); if (r.top > 100) return r.top; } } catch (e) {} return vpH(); }
   function isNarrow() { return vpW() > 0 && vpW() < 500; }
+  // 0.1.26（安卓玩家报「球跑来跑去」，照式神Live 的修法）：手机拖过的位置也记住（posNarrow），键盘弹着的时候球一步不动
+  function keyboardUp() { try { var vv = VIEW.visualViewport; if (!vv) return false; return (VIEW.innerHeight - vv.height - (vv.offsetTop || 0)) > 60; } catch (e) { return false; } }
   function placeBall() {
     var b = DOC.getElementById(NS + '-ball'); if (!b) return;
     recalib();
-    if (settings.pos && typeof settings.pos.left === 'number' && !isNarrow()) {
-      var c = clampXY(settings.pos.left, settings.pos.top); setClientPos(b, c.x, c.y); return;
+    var saved = isNarrow() ? settings.posNarrow : settings.pos;
+    if (saved && typeof saved.left === 'number') {
+      var c = clampXY(saved.left, saved.top); setClientPos(b, c.x, c.y); snapSoon(400); return;
     }
     setClientPos(b, vpW() - 66, Math.max(60, (isNarrow() ? inputTop() : vpH()) - 200));
     snapSoon(400);
@@ -560,8 +564,9 @@
   function reflow() {
     if (!mounted) return;
     var typing = typingInPanel();
-    if (!typing) placeBall();
-    if (isOpen()) { if (typing) liftForKeyboard(); else setOpen(true); }
+    // 键盘弹着的时候球不动——安卓上"到处乱跑"就是键盘一弹 visualViewport 变了、这里重算位置来的
+    if (!typing && !keyboardUp()) placeBall();
+    if (isOpen()) { if (typing) liftForKeyboard(); else if (!keyboardUp()) setOpen(true); }
   }
   function reflowSoon() { clearTimeout(kvTimer); kvTimer = setTimeout(reflow, 300); }
 
@@ -896,7 +901,7 @@
     function up(e) {
       if (!dragging) return; dragging = false;
       try { ball.releasePointerCapture(e.pointerId); } catch (err) {}
-      if (moved) { var r = ball.getBoundingClientRect(); if (!isNarrow()) { settings.pos = { left: r.left, top: r.top }; saveSettings(); } snapSoon(1500); }
+      if (moved) { var r = ball.getBoundingClientRect(); if (isNarrow()) settings.posNarrow = { left: r.left, top: r.top }; else settings.pos = { left: r.left, top: r.top }; saveSettings(); snapSoon(1500); }
       else { setOpen(!isOpen()); if (isOpen()) setUnread(0); }
     }
     ball.addEventListener('pointerup', up);
@@ -1070,7 +1075,7 @@
       renderSettings();
     });
     s.querySelector('.tl-set-clear').addEventListener('click', function () { writeLog([]); renderBody(); toast('清空了', 'ok'); });
-    s.querySelector('.tl-set-resetpos').addEventListener('click', function () { settings.pos = null; settings.panelPos = null; saveSettings(); placeBall(); placePanel(); toast('回去了', 'ok'); });
+    s.querySelector('.tl-set-resetpos').addEventListener('click', function () { settings.pos = null; settings.posNarrow = null; settings.panelPos = null; saveSettings(); placeBall(); placePanel(); toast('回去了', 'ok'); });
     var kIn = s.querySelector('.tl-api-key'); if (kIn) kIn.addEventListener('focus', function () { kIn.removeAttribute('readonly'); });
     s.querySelector('.tl-api-fetch').addEventListener('click', async function () {
       var btn = this, u = s.querySelector('.tl-api-url').value.trim(), k = s.querySelector('.tl-api-key').value.trim();
