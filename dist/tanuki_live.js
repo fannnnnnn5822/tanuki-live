@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.24';
+  var VERSION = '0.1.25';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -1010,7 +1010,7 @@
           '<div class="tl-row"><button class="tl-btn ghost tl-ed-copy">复制成我的人格再改</button></div>') +
       '<h4>导入一个人格</h4>' +
       '<div class="tl-note">把任何角色请出故事，让 ta 坐到你旁边一起看。名字 + 一段 ta 是谁/怎么说话（可以直接贴世界书条目或角色描述，会被折射成"第四面墙外的 ta"）。</div>' +
-      '<input type="text" class="tl-imp-name" placeholder="名字，比如：卫疏影">' +
+      '<input type="text" class="tl-imp-name" placeholder="名字">' +
       '<input type="text" class="tl-imp-emoji" placeholder="一个 emoji 当头像（可空）">' +
       '<textarea class="tl-ta tl-imp-desc" placeholder="ta 是谁、怎么说话、在意什么。越具体越像。"></textarea>' +
       '<div class="tl-row"><button class="tl-btn tl-imp-go">请 ta 坐下</button></div>' +
