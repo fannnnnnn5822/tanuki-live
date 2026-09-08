@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.26';
+  var VERSION = '0.1.27';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -308,7 +308,8 @@
   /* ================================================================
      设置 & 存储
      ================================================================ */
-  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, adoptMode: 'inject', snap: true, custom: [], pos: null };
+  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, adoptMode: 'inject', snap: true, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null };
+  var GROUP_MAX = 3;
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
   var API_KEY_LS = NS + '-api';
@@ -339,6 +340,7 @@
         if (typeof raw.auto === 'boolean') settings.auto = raw.auto;
         if (typeof raw.bubble === 'boolean') settings.bubble = raw.bubble;
         if (typeof raw.snap === 'boolean') settings.snap = raw.snap;
+        if (raw.group && typeof raw.group === 'object') settings.group = { on: !!raw.group.on, members: Array.isArray(raw.group.members) ? raw.group.members.slice(0, GROUP_MAX) : settings.group.members };
         if (typeof raw.everyN === 'number' && raw.everyN >= 1) settings.everyN = raw.everyN;
         if (raw.adoptMode === 'inject' || raw.adoptMode === 'input') settings.adoptMode = raw.adoptMode;
         if (Array.isArray(raw.custom)) settings.custom = raw.custom;
@@ -375,14 +377,18 @@
         updateVariablesWith(function (vv) { vv = vv || {}; vv[LOG_KEY] = vv[LOG_KEY] || {}; vv[LOG_KEY].logs = {}; vv[LOG_KEY].logs[settings.persona] = legacy; delete vv[LOG_KEY].log; return vv; }, { type: 'chat' });
         return legacy;
       }
-      var l = box.logs && Array.isArray(box.logs[settings.persona]) ? box.logs[settings.persona] : [];
+      var l = box.logs && Array.isArray(box.logs[logKey()]) ? box.logs[logKey()] : [];
       return l;
     } catch (e) { return []; }
   }
+  // 0.1.27：群聊另存一份记录（键 __group），关掉群聊各人格自己的记录还在
+  function groupOn() { return !!(settings.group && settings.group.on && (settings.group.members || []).length >= 2); }
+  function groupMembers() { var ids = (settings.group && settings.group.members) || []; var L = allPersonas(); return ids.map(function (id) { for (var i = 0; i < L.length; i++) if (L[i].id === id) return L[i]; return null; }).filter(Boolean).slice(0, GROUP_MAX); }
+  function logKey() { return groupOn() ? '__group' : settings.persona; }
   function writeLog(log) {
     try {
       if (log.length > LOG_MAX) log = log.slice(log.length - LOG_MAX);
-      var pid = settings.persona;
+      var pid = logKey();
       updateVariablesWith(function (v) { v = v || {}; v[LOG_KEY] = v[LOG_KEY] || {}; v[LOG_KEY].logs = v[LOG_KEY].logs || {}; v[LOG_KEY].logs[pid] = log; delete v[LOG_KEY].log; return v; }, { type: 'chat' });
     } catch (e) {}
     return log;
@@ -855,7 +861,15 @@
     panel.querySelector('.tl-gear').addEventListener('click', function () { toggleSettings(); });
     panel.querySelector('.tl-poke').addEventListener('click', function () { commentNow('poke'); });
     panel.querySelector('.tl-auto').addEventListener('click', function () { settings.auto = !settings.auto; saveSettings(); renderHead(); toast(settings.auto ? '⚡ 自动弹幕：开' : '🔕 自动弹幕：关，想听就点 💬', 'ok'); });
-    panel.querySelector('.tl-sel').addEventListener('change', function () { switchPersona(this.value); });
+    panel.querySelector('.tl-sel').addEventListener('change', function () {
+      var v = this.value;
+      if (v === '__group') {
+        if ((settings.group.members || []).length < 2) { toast('先去 ⚙ 里选 2 到 3 个人', 'warn'); renderHead(); toggleSettings(true); return; }
+        settings.group.on = true; saveSettings(); hideBubble(); renderAll(); scrollBottom(); return;
+      }
+      if (settings.group.on) { settings.group.on = false; saveSettings(); }
+      switchPersona(v); renderAll();
+    });
     var ta = panel.querySelector('textarea');
     var sendBtn = panel.querySelector('.tl-send');
     function doSend() { var t = ta.value.trim(); if (!t) return; ta.value = ''; ta.style.height = ''; ask(t); }
@@ -914,8 +928,10 @@
     var p = currentPersona();
     panel.querySelector('.tl-av').innerHTML = tanukiSvg(p);
     var sel = panel.querySelector('.tl-sel');
-    sel.innerHTML = allPersonas().map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === p.id ? ' selected' : '') + '>' + esc(x.emoji + ' ' + x.name) + '</option>'; }).join('');
-    panel.querySelector('.tl-tag').textContent = p.tag || p.watches || '';
+    var gon = groupOn();
+    sel.innerHTML = '<option value="__group"' + (gon ? ' selected' : '') + '>👥 群聊' + (gon ? '：' + esc(groupMembers().map(function (x) { return x.name; }).join('·')) : '…') + '</option>' +
+      allPersonas().map(function (x) { return '<option value="' + esc(x.id) + '"' + (!gon && x.id === p.id ? ' selected' : '') + '>' + esc(x.emoji + ' ' + x.name) + '</option>'; }).join('');
+    panel.querySelector('.tl-tag').textContent = gon ? groupMembers().map(function (x) { return x.emoji; }).join(' ') + ' 轮流说，后说的接前面的话' : (p.tag || p.watches || '');
     panel.querySelector('.tl-auto').classList.toggle('on', !!settings.auto);
     var face = DOC.querySelector('#' + NS + '-ball .tl-face'); if (face) face.innerHTML = tanukiSvg(p);
     restyle();
@@ -997,6 +1013,10 @@
       '</span></label>' +
       '<div class="tl-note">注入＝它的主意作为幕后提示塞给 AI 一次，用完自动撤，你的消息里看不到。填进输入框＝那句话原样填进酒馆输入框，你改完自己发。</div>' +
       '<div class="tl-note">小窗收着的时候，它说的话直接冒在悬浮球顶上，几秒后自己缩回去；点气泡展开小窗看全文。关掉就只留红点。</div>' +
+      '<h4>群聊</h4>' +
+      '<label>几个人一起坐 <button class="tl-pill tl-set-gon ' + (settings.group.on ? 'on' : '') + '">' + (settings.group.on ? '开' : '关') + '</button></label>' +
+      '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-gm ' + ((settings.group.members || []).indexOf(x.id) >= 0 ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + x.name) + '</button>'; }).join('') + '</div>' +
+      '<div class="tl-note">点亮 2 到 3 个。开了以后正文一出来它们就轮流说（谁先开口随机），后说的必须接前面的话；你问一句它们也轮流答。一回合几个人就几次调用，嫌贵把「每几层说一次」调大。群里的对话另存一份，关掉群聊各人格自己的记录都还在。</div>' +
       '<h4>人格</h4>' +
       '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-p ' + (x.id === p.id ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + x.name) + '</button>'; }).join('') + '</div>' +
       '<div class="tl-note">' + esc(p.tag || '') + (p.watches ? ' · 盯：' + esc(p.watches) : '') + '</div>' +
@@ -1047,7 +1067,20 @@
     function stepN(d) { var n = Math.min(20, Math.max(1, (settings.everyN || 1) + d)); if (n === settings.everyN) return; settings.everyN = n; saveSettings(); s.querySelector('.tl-set-nv').textContent = n; }
     s.querySelector('.tl-set-nm').addEventListener('click', function () { stepN(-1); });
     s.querySelector('.tl-set-np').addEventListener('click', function () { stepN(1); });
-    s.querySelectorAll('.tl-set-p').forEach(function (b) { b.addEventListener('click', function () { switchPersona(this.getAttribute('data-id')); renderSettings(); }); });
+    s.querySelectorAll('.tl-set-p').forEach(function (b) { b.addEventListener('click', function () { if (settings.group.on) { settings.group.on = false; saveSettings(); } switchPersona(this.getAttribute('data-id')); renderSettings(); }); });
+    s.querySelector('.tl-set-gon').addEventListener('click', function () {
+      if (!settings.group.on && (settings.group.members || []).length < 2) { toast('先点亮 2 到 3 个人', 'warn'); return; }
+      settings.group.on = !settings.group.on; saveSettings(); hideBubble(); renderAll(); renderSettings(); scrollBottom();
+      toast(settings.group.on ? '👥 群聊开了：' + groupMembers().map(function (x) { return x.name; }).join('·') : '群聊关了，回到 ' + currentPersona().name, 'ok');
+    });
+    s.querySelectorAll('.tl-set-gm').forEach(function (b) { b.addEventListener('click', function () {
+      var id = this.getAttribute('data-id'); var m = settings.group.members || [];
+      var at = m.indexOf(id);
+      if (at >= 0) m.splice(at, 1); else { if (m.length >= GROUP_MAX) { toast('最多 ' + GROUP_MAX + ' 个', 'warn'); return; } m.push(id); }
+      settings.group.members = m;
+      if (settings.group.on && m.length < 2) settings.group.on = false;
+      saveSettings(); renderAll(); renderSettings();
+    }); });
     var edSave = s.querySelector('.tl-ed-save'); if (edSave) edSave.addEventListener('click', function () {
       var name = s.querySelector('.tl-ed-name').value.trim(), emoji = s.querySelector('.tl-ed-emoji').value.trim(), voice = s.querySelector('.tl-ed-voice').value.trim();
       if (!name || !voice) { toast('名字和提示词都不能空', 'warn'); return; }
@@ -1237,6 +1270,7 @@
     '- 你能看到技术面（预设、模型、层数、变量、世界书触发）。用得上就用，别为了显得懂而堆。',
     '- 想给剧情出主意时，把主意单独放一行、以 💡 开头、一行一条、最多 2 条、每条 ≤ 40 字（<user>可以一键把它塞进下一轮）。纯吐槽不用 💡。',
     '- 绝不替正文写正文，绝不扮演卡里的角色说台词，绝不复述正文。',
+    '- 正文里的状态栏、标签块、方括号数据（[Time|…][Outfit|…] 这种）、JSON、代码，是卡的机制不是人话：看懂就行，绝不照抄，绝不模仿它的格式往你的话里塞。',
     '- 下面的对话记录里有你自己之前说过的话。用过的梗、口头禅、比喻、对某人的评价，这一轮就换新的；别每轮都用同一套句式开头和收尾。你是个人，不是一张复读的卡。',
     '- 不用 markdown 标题、不用列表符号、不加"作为 AI"之类的话。纯文本。'
   ].join('\n');
@@ -1259,32 +1293,64 @@
     for (var i = 0; i < 4; i++) t = t.replace(/<([A-Za-z][\w-]*)(?:\s[^>]*)?>[\s\S]*?<\/\1\s*>/g, '');
     t = t.replace(/<\/?[A-Za-z][\w-]*(?:\s[^>]*)?\/?>/g, '');
     t = t.replace(/^```[a-z]*\s*\n?|\n?```\s*$/g, '');
-    return t.replace(/\n{3,}/g, '\n\n').trim();
+    // 0.1.27：玩家截图——嗑学家把卡的状态栏 [Time|…][Locate|…] 整块抄进了自己的话里。带竖线的方括号块一律剥掉
+    t = t.replace(/\[[^\[\]\n|]{1,24}\|[^\]]*\]/g, '');
+    return t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
+  // 0.1.27：talk 只管忙碌和分发；真正开口的是 speak。群聊＝成员打乱顺序轮流 speak，后面的人在记录里看得到前面的人刚说的
   async function talk(userLine, trigger) {
     if (busy) { toast('它还在想上一句', 'warn'); return; }
-    if (typeof generateRaw !== 'function') { toast('generateRaw 不可用，酒馆助手版本太老？', 'error'); return; }
+    if (typeof generateRaw !== 'function' && !activeApi().cfg) { toast('generateRaw 不可用，酒馆助手版本太老？', 'error'); return; }
     busy = true; setBusy(true);
-    var p = currentPersona();
+    try {
+      var ctx = await gatherContext(6);
+      if (groupOn()) {
+        var members = groupMembers().slice();
+        for (var k = members.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var tmp = members[k]; members[k] = members[j]; members[j] = tmp; }
+        for (var i = 0; i < members.length; i++) {
+          if (i > 0) await sleep(700);
+          await speak(members[i], ctx, userLine, trigger, { members: members, idx: i });
+        }
+      } else {
+        await speak(currentPersona(), ctx, userLine, trigger, null);
+      }
+    } catch (e) {
+      console.warn('[小狸Live] talk 失败', e);
+    } finally {
+      busy = false; setBusy(false);
+      if (pendingAuto) { pendingAuto = false; if (settings.auto) setTimeout(function () { if (!busy) talk('', 'auto'); }, 600); }
+    }
+  }
+  function groupRule(p, g) {
+    var others = g.members.filter(function (x) { return x.id !== p.id; }).map(function (x) { return x.name; }).join('、');
+    return '【群聊】现在不止你一个人坐在<user>旁边，还有 ' + others + '。记录里「旁边的某某说」就是他们刚说的话。' +
+      '你必须接话：同意、反驳、补刀、岔开都行，但要针对他们说的内容，不许各说各的。一回合最多两句。不替别人说话，不模仿别人的声线，不用「某某说得对」这种开头。' +
+      (g.idx === 0 ? '这一轮你先开口。' : '前面的人刚说完，你接。');
+  }
+  async function speak(p, ctx, userLine, trigger, g) {
     var floor = -1;
     try { floor = typeof getLastMessageId === 'function' ? getLastMessageId() : -1; } catch (e) {}
     try {
-      var ctx = await gatherContext(6);
       var log = readLog();
-      var hist = log.filter(function (m) { return m.who === 'me' || m.who === 'them'; }).slice(-10).map(function (m) {
-        return { role: m.who === 'me' ? 'user' : 'assistant', content: m.text };
+      var hist = log.filter(function (m) { return m.who === 'me' || m.who === 'them'; }).slice(g ? -14 : -10).map(function (m) {
+        if (m.who === 'me') return { role: 'user', content: m.text };
+        if (g && m.pname && m.pname !== p.name) return { role: 'user', content: '（旁边的' + m.pname + '说：' + m.text + '）' };
+        return { role: 'assistant', content: m.text };
       });
       var prompts = [
         { role: 'system', content: '【你是谁】\n' + p.voice },
         { role: 'system', content: contextBlock(ctx) },
         { role: 'system', content: RULES }
-      ].concat(hist);
+      ];
+      if (g) prompts.push({ role: 'system', content: groupRule(p, g) });
+      prompts = prompts.concat(hist);
       var uin = userLine
         ? userLine
         : (trigger === 'poke'
             ? '（<user>戳了你一下：现在说两句。）'
             : '（正文刚出来一回合。看一眼最新那层，随口说两句——只说你最想说的那一件。这轮真没啥可说就说没啥。）');
+      if (g && g.idx > 0) uin += '（前面的人刚说完，接话。）';
       var A = activeApi();
       var reply;
       if (A.cfg) {
@@ -1314,11 +1380,8 @@
     } catch (e) {
       var msg = (e && e.message) || String(e);
       if (/unauthorized|401|403|api key|forbidden/i.test(msg)) msg += '（认证没过 → 去 ⚙ 给小狸填一个独立 API，或先在 Sugar Baby 手机里填好它会自动读）';
-      toast('🦝 小狸没说出话：' + msg.slice(0, 120), 'error');
+      toast('🦝 ' + p.name + ' 没说出话：' + msg.slice(0, 120), 'error');
       console.warn('[小狸Live] 生成失败', e);
-    } finally {
-      busy = false; setBusy(false);
-      if (pendingAuto) { pendingAuto = false; if (settings.auto) setTimeout(function () { if (!busy) talk('', 'auto'); }, 600); }
     }
   }
   function ask(text) {
