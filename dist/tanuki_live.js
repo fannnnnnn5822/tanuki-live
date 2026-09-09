@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.28';
+  var VERSION = '0.1.29';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -308,7 +308,7 @@
   /* ================================================================
      设置 & 存储
      ================================================================ */
-  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, adoptMode: 'inject', snap: true, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null };
+  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, adoptMode: 'inject', snap: true, presence: false, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null };
   var GROUP_MAX = 3;
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
@@ -340,6 +340,7 @@
         if (typeof raw.auto === 'boolean') settings.auto = raw.auto;
         if (typeof raw.bubble === 'boolean') settings.bubble = raw.bubble;
         if (typeof raw.snap === 'boolean') settings.snap = raw.snap;
+        if (typeof raw.presence === 'boolean') settings.presence = raw.presence;
         if (raw.group && typeof raw.group === 'object') settings.group = { on: !!raw.group.on, members: Array.isArray(raw.group.members) ? raw.group.members.slice(0, GROUP_MAX) : settings.group.members };
         if (typeof raw.everyN === 'number' && raw.everyN >= 1) settings.everyN = raw.everyN;
         if (raw.adoptMode === 'inject' || raw.adoptMode === 'input') settings.adoptMode = raw.adoptMode;
@@ -1007,6 +1008,8 @@
       '<label>球上冒气泡 <button class="tl-pill tl-set-bubble ' + (settings.bubble ? 'on' : '') + '">' + (settings.bubble ? '开' : '关') + '</button></label>' +
       '<label>球贴边半藏（手机） <button class="tl-pill tl-set-snap ' + (settings.snap ? 'on' : '') + '">' + (settings.snap ? '开' : '关') + '</button></label>' +
       '<div class="tl-note">只在手机上生效：球靠着屏幕左右边几秒没人碰，就半藏进边里变半透明，不占地方；点它、冒气泡、开窗都会出来。电脑上不贴。</div>' +
+      '<label>正文知道它在 <button class="tl-pill tl-set-pres ' + (settings.presence ? 'on' : '') + '">' + (settings.presence ? '开' : '关') + '</button></label>' +
+      '<div class="tl-note">默认关：小狸完全在第四面墙外，主线不知道它存在。开了就常驻给主线塞一小段「' + esc(currentPersona().name) + ' 坐在 {{user}} 身边，只有 {{user}} 看得见听得见」，正文可以偶尔写它一个小动作或一句反应，但不替它说成段台词、不替你做决定、不复述它说过的话。每次生成前刷新，带上它最近几句。想要它彻底隐形就关着。</div>' +
       '<label>点「采纳」之后 <span class="tl-row">' +
         '<button class="tl-pill tl-set-adopt ' + (settings.adoptMode !== 'input' ? 'on' : '') + '" data-mode="inject">悄悄注入下一轮</button>' +
         '<button class="tl-pill tl-set-adopt ' + (settings.adoptMode === 'input' ? 'on' : '') + '" data-mode="input">填进输入框</button>' +
@@ -1062,6 +1065,7 @@
     s.querySelector('.tl-set-auto').addEventListener('click', function () { settings.auto = !settings.auto; saveSettings(); renderSettings(); renderHead(); });
     s.querySelector('.tl-set-bubble').addEventListener('click', function () { settings.bubble = !settings.bubble; saveSettings(); if (!settings.bubble) hideBubble(); renderSettings(); });
     s.querySelector('.tl-set-snap').addEventListener('click', function () { settings.snap = !settings.snap; saveSettings(); if (!settings.snap) unsnap(); else snapSoon(500); renderSettings(); });
+    s.querySelector('.tl-set-pres').addEventListener('click', function () { settings.presence = !settings.presence; saveSettings(); syncPresence(); renderSettings(); toast(settings.presence ? '正文知道它在了：下一轮起主线能写到它' : '它又隐形了', 'ok'); });
     s.querySelectorAll('.tl-set-adopt').forEach(function (b) { b.addEventListener('click', function () { settings.adoptMode = this.getAttribute('data-mode') === 'input' ? 'input' : 'inject'; saveSettings(); renderSettings(); }); });
     // 安卓 WebView 的 number 输入框会把数字渲染没（玩家报的），改成 −/＋ 步进，数字是普通文字
     function stepN(d) { var n = Math.min(20, Math.max(1, (settings.everyN || 1) + d)); if (n === settings.everyN) return; settings.everyN = n; saveSettings(); s.querySelector('.tl-set-nv').textContent = n; }
@@ -1450,6 +1454,30 @@
 
   // 采纳：把某条 💡 以一次性注入塞进下一轮
   var ADOPT_ID = NS + '-adopt';
+  // 0.1.29（Fan 点的，抄式神Live 的灯）：「正文知道它在」——默认关。开了就常驻注入一小段，告诉主线 {{user}} 身边坐着这只小狸，
+  // 正文可以偶尔写它一个小动作或一句反应，但不替它说成段台词、不替 {{user}} 做决定、不复述它说过的话。每次生成前刷新，带上它最近几句。
+  var PRESENCE_ID = NS + '-presence';
+  function syncPresence() {
+    try {
+      if (!settings.presence) { uninjectPrompts([PRESENCE_ID]); return; }
+      var who, intro;
+      if (groupOn()) {
+        var ms = groupMembers();
+        who = ms.map(function (x) { return '「' + x.name + '」' + (x.tag ? '（' + String(x.tag).split(' · ')[0] + '）' : ''); }).join('、');
+        intro = '{{user}} 身边坐着几只只有 {{user}} 看得见、听得见的小狸：' + who + '。它们是第四面墙外的观众，一边看一边对 {{user}} 小声评头论足，互相也会拌嘴。';
+      } else {
+        var p = currentPersona();
+        intro = '{{user}} 身边坐着一只只有 {{user}} 看得见、听得见的小狸，叫「' + p.name + '」' + (p.tag ? '（' + String(p.tag).split(' · ')[0] + '）' : '') + '。它是第四面墙外的观众，一边看一边对 {{user}} 小声评头论足。';
+      }
+      var recent = readLog().filter(function (m) { return m.who === 'them' || m.who === 'me'; }).slice(-4).map(function (m) {
+        return (m.who === 'me' ? '{{user}}' : (m.pname || '小狸')) + '：' + String(m.text).replace(/\s+/g, ' ').slice(0, 80);
+      }).join('\n');
+      var content = '[' + intro + '正文里的其他角色看不见也听不见它。正文可以偶尔写它一个小动作或一句短反应（一句以内，不是每段都写）；绝不替它说成段的台词，绝不让它替 {{user}} 做决定，绝不复述它说过的话，绝不让卡里的人和它对话。' +
+        (recent ? '\n它刚在 {{user}} 耳边说过（正文不要复述这些）：\n' + recent : '') + ']';
+      uninjectPrompts([PRESENCE_ID]);
+      injectPrompts([{ id: PRESENCE_ID, position: 'in_chat', depth: 3, role: 'system', content: content, should_scan: false }]);
+    } catch (e) {}
+  }
   // 两种采纳方式（设置里选，玩家点的）：inject＝悄悄一次性注入下一轮（默认）；input＝填进酒馆输入框，玩家自己改改再发
   function adopt(logIdx, sugIdx, btn) {
     var log = readLog(); var m = log[logIdx]; if (!m) return;
@@ -1509,9 +1537,10 @@
       eventOn(tavern_events.GENERATION_ENDED, H.gen);
     } catch (e) {}
     try {
-      H.chat = function () { activatedEntries = []; lastAutoKey = ''; autoCounter = 0; pendingAuto = false; setUnread(0); if (mounted) { renderBody(); } };
+      H.chat = function () { activatedEntries = []; lastAutoKey = ''; autoCounter = 0; pendingAuto = false; setUnread(0); if (mounted) { renderBody(); } setTimeout(syncPresence, 400); };
       eventOn(tavern_events.CHAT_CHANGED, H.chat);
     } catch (e) {}
+    try { H.before = function () { syncPresence(); }; eventOn(tavern_events.GENERATION_AFTER_COMMANDS, H.before); } catch (e) {}
     try {
       H.btn = function () { if (!mounted) mount(); var open = isOpen(); placeBall(); setOpen(!open); if (!open) setUnread(0); };
       if (typeof replaceScriptButtons === 'function') replaceScriptButtons([{ name: BTN, visible: true }]);
@@ -1526,6 +1555,7 @@
     try { if (H.wi) eventOff(tavern_events.WORLD_INFO_ACTIVATED, H.wi); } catch (e) {}
     try { if (H.gen) eventOff(tavern_events.GENERATION_ENDED, H.gen); } catch (e) {}
     try { if (H.chat) eventOff(tavern_events.CHAT_CHANGED, H.chat); } catch (e) {}
+    try { if (H.before) eventOff(tavern_events.GENERATION_AFTER_COMMANDS, H.before); } catch (e) {}
     try { if (H.btn) eventOff(getButtonEvent(BTN), H.btn); } catch (e) {}
     try { if (H.key) DOC.removeEventListener('keydown', H.key); } catch (e) {}
     H = {};
@@ -1548,7 +1578,7 @@
     if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
     if (kvTimer) { clearTimeout(kvTimer); kvTimer = null; }
     if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
-    try { uninjectPrompts([ADOPT_ID]); } catch (e) {}
+    try { uninjectPrompts([ADOPT_ID, PRESENCE_ID]); } catch (e) {}
     if (VIEW[INSTANCE_KEY] === cleanup) VIEW[INSTANCE_KEY] = null;
     console.log('[小狸Live] 收拾干净走了');
   }
@@ -1561,6 +1591,7 @@
      ================================================================ */
   bindEvents();
   mount();
+  syncPresence();
   console.log('%c🦝 酒馆小狸 Live %cv' + VERSION + ' · ' + currentPersona().emoji + ' ' + currentPersona().name + ' 坐下了',
     'font-weight:700;color:#fff;background:#e85d75;padding:3px 8px;border-radius:4px 0 0 4px',
     'color:#ddd;background:#1a1a2e;padding:3px 8px;border-radius:0 4px 4px 0');
