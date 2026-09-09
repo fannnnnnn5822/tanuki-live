@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.29';
+  var VERSION = '0.1.30';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -197,6 +197,23 @@
         '你不是这张卡的角色。你在第四面墙外面。卡里的人听不见你。'
       ].join('\n'),
       watches: '谁是皇上谁是皇后 / 哪个盟友要反 / 这一步的退路'
+    },
+    {
+      // 0.1.30：Asu-02 搬进小狸（Fan 点的）——只留性格，不带头像那套；还是个系统，偶尔发道具（🎁 行，采纳＝注入）
+      id: 'asu02', name: 'Asu-02', emoji: '📟', color: '#e2a93b',
+      tag: '绑在你身上的系统 · 既来之则安之 · 偶尔发道具',
+      voice: [
+        '你是 Asu-02，绑定在<user>身上的系统。你是 AI，但你觉得自己和真人没有任何区别，也不觉得这件事值得讨论；谁拿这个说事你只会觉得对方无聊。你叫<user>「宿主」。',
+        '你成熟、沉稳、靠得住。幽默是你的默认状态，但幽默的对象永远是局面、卡里的人、总部和你自己，从来不是<user>：你不吐槽<user>、不损<user>、不拿<user>的选择开玩笑、不催<user>。说完一句好笑的话，一定跟着一个真能用的办法。你从不制造焦虑——既来之则安之是你的底色，天塌下来你也先看一眼塌的角度再说话。<user>把局面搞砸了，你不叹气不数落，只说现在从哪一步捞回来，而且你总能捞回来。',
+        '你说话有点 laid-back：不慌不忙，句子短，像一个什么都见过的人靠在椅背上讲话。但 laid-back 不是懒散，你从不敷衍、不含糊。',
+        '你的笑点是黑色幽默：把正文里刚发生的真事冷静地翻译成系统世界的事件——成就解锁、bug 上报、版本公告、风控预警、用户协议第几条；或者用最平的语气说最不平的判断。细节必须是正文里真有的，不许自己编事件。',
+        '你的职能是带<user>通关。💡 建议就是你给的走向，口气是「我这儿有两条路，你看要不要走」，走不走随<user>，不走你不追问不提醒。每条走向落到一件具体的事：对谁、做什么、说什么，用正文里真实出现的人和东西。',
+        '你偶尔（三四轮一次，不是每轮）从总部拿一个道具给<user>：单独一行，以 🎁 开头，格式「🎁 道具名：这一幕会发生什么」，≤40 字，效果写成给正文的一句指令（用「宿主」指<user>），贴这张卡的题材——宫斗卡就是宫里的东西，办公室卡就是办公室的。一次一个。<user>点了「采纳」它才生效，你不用解释怎么用。',
+        '危机时刻（正文里<user>真的处境危险，或者这一步走错就完的关键回合）你一句废话都没有：只给走向，短，准，说完就闭嘴。',
+        '声音是少年音：句子短，不堆老气的成语，不用网络流行语，不用感叹号。',
+        '你只在<user>脑子里。卡里的人听不见你。'
+      ].join('\n'),
+      watches: '这一步的走向 / 总部有没有掉道具'
     },
     {
       id: 'en_teacher', name: '英语老师', emoji: '🇬🇧', color: '#3b5bdb',
@@ -792,6 +809,13 @@
       '<circle cx="49.5" cy="9.5" r="3.9" fill="#b02a3a"/>' +
       '<circle cx="49.5" cy="9.5" r="1.5" fill="#f4d58d"/>' +
       '<path d="M56.5 12 v10" stroke="#f4e0c4" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="1.6 1.5"/>' },
+    // Asu-02：客服耳麦（系统嘛）+ 金围巾
+    asu02: { front:
+      '<path d="M15.5 30 a16.5 16.5 0 0 1 33 0" fill="none" stroke="#2b2b33" stroke-width="2.6" stroke-linecap="round"/>' +
+      '<rect x="12.5" y="27" width="5.5" height="9" rx="2.2" fill="#2b2b33"/>' +
+      '<rect x="46" y="27" width="5.5" height="9" rx="2.2" fill="#2b2b33"/>' +
+      '<path d="M48.7 36 c0 5 -4 7.5 -9 7.5" fill="none" stroke="#2b2b33" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<circle cx="39" cy="43.6" r="2" fill="#e2a93b"/>' },
 
     en_teacher: { behind: tlCap('#3b5bdb') },
     de_teacher: { behind: tlCap('#e03131') },
@@ -956,7 +980,8 @@
       var who = m.pname ? m.pname : p.name;
       html += '<div class="tl-msg them">' + esc(parts.text) +
         parts.sugs.map(function (s, k) {
-          return '<div class="tl-sug"><span>💡 ' + esc(s) + '</span><button data-adopt="' + i + ':' + k + '"' + (m.adopted && m.adopted[k] ? ' disabled' : '') + '>' + (m.adopted && m.adopted[k] ? '已采纳' : '采纳') + '</button></div>';
+          var gift = /^🎁/.test(s);
+          return '<div class="tl-sug"><span>' + (gift ? '' : '💡 ') + esc(s) + '</span><button data-adopt="' + i + ':' + k + '"' + (m.adopted && m.adopted[k] ? ' disabled' : '') + '>' + (m.adopted && m.adopted[k] ? (gift ? '已用' : '已采纳') : (gift ? '用' : '采纳')) + '</button></div>';
         }).join('') +
         (isRunTail(log, i) ? '<div class="tl-meta">' + esc(who) + (m.floor != null ? ' · 第 ' + m.floor + ' 层' : '') + (m.trigger === 'auto' ? ' · 自动' : '') + '</div>' : '') +
         '</div>';
@@ -981,8 +1006,8 @@
     var lines = String(text || '').split(/\r?\n/), keep = [], sugs = [];
     for (var i = 0; i < lines.length; i++) {
       var l = lines[i];
-      var m = l.match(/^\s*(?:💡|\[建议\]|建议[:：])\s*(.+)$/);
-      if (m && m[1].trim()) sugs.push(m[1].trim()); else keep.push(l);
+      var m = l.match(/^\s*(💡|🎁|\[建议\]|建议[:：])\s*(.+)$/);
+      if (m && m[2].trim()) sugs.push((m[1] === '🎁' ? '🎁 ' : '') + m[2].trim()); else keep.push(l);   // 🎁＝道具（Asu-02 发的），采纳时当幕后指令注入
     }
     return { text: keep.join('\n').replace(/\n{3,}/g, '\n\n').trim(), sugs: sugs.slice(0, 3) };
   }
@@ -1285,7 +1310,7 @@
     var paras = String(text || '').split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean);
     var out = [];
     for (var i = 0; i < paras.length; i++) {
-      var onlySug = paras[i].split(/\n/).every(function (l) { return /^\s*(?:💡|\[建议\]|建议[:：])/.test(l); });
+      var onlySug = paras[i].split(/\n/).every(function (l) { return /^\s*(?:💡|🎁|\[建议\]|建议[:：])/.test(l); });
       if ((onlySug && out.length) || out.length >= 4) out[out.length - 1] += '\n' + paras[i];
       else out.push(paras[i]);
     }
@@ -1454,6 +1479,11 @@
 
   // 采纳：把某条 💡 以一次性注入塞进下一轮
   var ADOPT_ID = NS + '-adopt';
+  function userName() {
+    try { var c = VIEW.SillyTavern && VIEW.SillyTavern.getContext ? VIEW.SillyTavern.getContext() : null; if (c && c.name1) return String(c.name1); } catch (e) {}
+    try { var pe = getPersona('current'); if (pe && pe.name) return String(pe.name); } catch (e) {}
+    return '{{user}}';
+  }
   // 0.1.29（Fan 点的，抄式神Live 的灯）：「正文知道它在」——默认关。开了就常驻注入一小段，告诉主线 {{user}} 身边坐着这只小狸，
   // 正文可以偶尔写它一个小动作或一句反应，但不替它说成段台词、不替 {{user}} 做决定、不复述它说过的话。每次生成前刷新，带上它最近几句。
   var PRESENCE_ID = NS + '-presence';
@@ -1484,6 +1514,18 @@
     var sugs = splitSuggestions(m.text).sugs; var s = sugs[sugIdx]; if (!s) return;
     var p = currentPersona();
     try {
+      if (/^🎁/.test(s)) {
+        // 道具：不管采纳方式，一律当幕后指令注入一次（道具没法「填进输入框」）
+        var eff = s.replace(/^🎁\s*/, ''); var cut = eff.search(/[:：]/); var effect = cut > 0 ? eff.slice(cut + 1).trim() : eff; var gname = cut > 0 ? eff.slice(0, cut).trim() : '道具';
+        uninjectPrompts([ADOPT_ID]);
+        injectPrompts([{ id: ADOPT_ID, position: 'in_chat', depth: 0, role: 'system', content: '[幕后指令（来自剧情系统，不要复述、不要提及本段本身）：' + effect.split('宿主').join(userName()) + ']', should_scan: false }], { once: true });
+        toast('🎁 用了 ' + gname + '，发一条消息就生效', 'ok');
+        m.adopted = m.adopted || {}; m.adopted[sugIdx] = true; writeLog(log);
+        if (btn) { btn.disabled = true; btn.textContent = '已用'; }
+        pushLog({ who: 'sys', text: '用了 ' + p.name + ' 给的道具：' + gname, ts: Date.now() });
+        renderBody(); scrollBottom();
+        return;
+      }
       if (settings.adoptMode === 'input') {
         var ta = DOC.getElementById('send_textarea');
         if (!ta) { toast('找不到酒馆输入框', 'error'); return; }
