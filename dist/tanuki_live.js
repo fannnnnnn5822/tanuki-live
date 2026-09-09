@@ -22,7 +22,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.27';
+  var VERSION = '0.1.28';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -1016,7 +1016,7 @@
       '<h4>群聊</h4>' +
       '<label>几个人一起坐 <button class="tl-pill tl-set-gon ' + (settings.group.on ? 'on' : '') + '">' + (settings.group.on ? '开' : '关') + '</button></label>' +
       '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-gm ' + ((settings.group.members || []).indexOf(x.id) >= 0 ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + x.name) + '</button>'; }).join('') + '</div>' +
-      '<div class="tl-note">点亮 2 到 3 个。开了以后正文一出来它们就轮流说（谁先开口随机），后说的必须接前面的话；你问一句它们也轮流答。一回合几个人就几次调用，嫌贵把「每几层说一次」调大。群里的对话另存一份，关掉群聊各人格自己的记录都还在。</div>' +
+      '<div class="tl-note">点亮 2 到 3 个。开了以后正文一出来它们就轮流说（谁先开口随机），后说的必须接前面的话；你问一句它们也轮流答。一回合只调一次 API，一次演完一桌。群里的对话另存一份，关掉群聊各人格自己的记录都还在。</div>' +
       '<h4>人格</h4>' +
       '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-p ' + (x.id === p.id ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + x.name) + '</button>'; }).join('') + '</div>' +
       '<div class="tl-note">' + esc(p.tag || '') + (p.watches ? ' · 盯：' + esc(p.watches) : '') + '</div>' +
@@ -1306,12 +1306,7 @@
     try {
       var ctx = await gatherContext(6);
       if (groupOn()) {
-        var members = groupMembers().slice();
-        for (var k = members.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var tmp = members[k]; members[k] = members[j]; members[j] = tmp; }
-        for (var i = 0; i < members.length; i++) {
-          if (i > 0) await sleep(700);
-          await speak(members[i], ctx, userLine, trigger, { members: members, idx: i });
-        }
+        await groupSpeak(ctx, userLine, trigger);   // 0.1.28：一次调用演完一桌（Fan：别一回合烧三次 API）
       } else {
         await speak(currentPersona(), ctx, userLine, trigger, null);
       }
@@ -1320,6 +1315,68 @@
     } finally {
       busy = false; setBusy(false);
       if (pendingAuto) { pendingAuto = false; if (settings.auto) setTimeout(function () { if (!busy) talk('', 'auto'); }, 600); }
+    }
+  }
+  // 群聊：一次调用，模型同时演所有人，按【名字】分段；脚本定开口顺序（随机），拆段后按人格分别入记录
+  async function groupSpeak(ctx, userLine, trigger) {
+    var members = groupMembers().slice();
+    for (var k = members.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var tmp = members[k]; members[k] = members[j]; members[j] = tmp; }
+    var floor = -1;
+    try { floor = typeof getLastMessageId === 'function' ? getLastMessageId() : -1; } catch (e) {}
+    try {
+      var names = members.map(function (x) { return x.name; });
+      var voices = members.map(function (x) { return '——【' + x.name + '】——\n' + x.voice; }).join('\n\n');
+      var fmt = [
+        '【群聊规则】上面这 ' + members.length + ' 个人此刻一起坐在<user>旁边看戏，你一个人演全部。输出格式：每人一段，段首写【名字】（用上面给的名字，一字不差），一段就是这个人这回合说的话，一到两句。',
+        '这一轮开口顺序：' + names.join(' → ') + '。后说的必须接前面的人说的（同意、反驳、补刀、岔开都行），不许各说各的。全员说完可以再加最多两段回嘴，总共不超过 ' + (members.length + 2) + ' 段。',
+        '每个人只用自己的声线，别串：嗑的只管嗑，使坏的只管使坏，外行的只问外行的问题。💡 建议行跟在说它的那个人的段落里。段与段之间空一行，段内不要再用【】。'
+      ].join('\n');
+      var log = readLog();
+      var hist = log.filter(function (m) { return m.who === 'me' || m.who === 'them'; }).slice(-12).map(function (m) {
+        return { role: m.who === 'me' ? 'user' : 'assistant', content: m.who === 'me' ? m.text : '【' + (m.pname || '?') + '】' + m.text };
+      });
+      var prompts = [
+        { role: 'system', content: '【你要演的人】\n' + voices },
+        { role: 'system', content: contextBlock(ctx) },
+        { role: 'system', content: RULES },
+        { role: 'system', content: fmt }
+      ].concat(hist);
+      var uin = userLine
+        ? userLine
+        : (trigger === 'poke'
+            ? '（<user>戳了你们一下：都说两句。）'
+            : '（正文刚出来一回合。看一眼最新那层，按顺序每人说两句，后面的接前面的。）');
+      var A = activeApi();
+      var reply;
+      if (A.cfg) reply = await callIndependent(A.cfg, prompts.concat([{ role: 'user', content: uin }]));
+      else reply = await generateRaw({ user_input: uin, ordered_prompts: prompts.concat(['user_input']), should_silence: true, should_stream: false, max_chat_history: 0, generation_id: NS + '_' + Date.now() });
+      var text = cleanReply((typeof reply === 'string' ? reply : (reply && reply.content) || '').trim());
+      if (!text) throw new Error('空回复');
+      // 拆段：【名字】开头；认不出名字的段落归给上一个说话的人
+      var segs = [], cur = null;
+      text.split(/\r?\n/).forEach(function (line) {
+        var m = line.match(/^\s*[【\[]([^】\]]{1,14})[】\]]\s*[:：]?\s*(.*)$/);
+        if (m) {
+          var who = null; var nm = m[1].trim();
+          for (var i = 0; i < members.length; i++) if (members[i].name === nm || nm.indexOf(members[i].name) >= 0 || members[i].name.indexOf(nm) >= 0) { who = members[i]; break; }
+          if (who) { cur = { p: who, lines: [] }; segs.push(cur); if (m[2]) cur.lines.push(m[2]); return; }
+        }
+        if (!cur) { cur = { p: members[0], lines: [] }; segs.push(cur); }
+        cur.lines.push(line);
+      });
+      segs = segs.map(function (s) { return { p: s.p, text: s.lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() }; }).filter(function (s) { return s.text; }).slice(0, members.length + 2);
+      if (!segs.length) throw new Error('没拆出任何人的话');
+      for (var si = 0; si < segs.length; si++) {
+        if (si > 0) await sleep(Math.min(2200, 600 + segs[si].text.length * 45));
+        pushLog({ who: 'them', pname: segs[si].p.name, text: segs[si].text, floor: floor >= 0 ? floor : null, trigger: trigger, ts: Date.now() });
+        renderBody(); scrollBottom();
+        if (!isOpen()) { setUnread(unread + 1); showBubble(segs[si].p.name, segs[si].text); }
+      }
+    } catch (e) {
+      var msg = (e && e.message) || String(e);
+      if (/unauthorized|401|403|api key|forbidden/i.test(msg)) msg += '（认证没过 → 去 ⚙ 给小狸填一个独立 API）';
+      toast('🦝 这桌人没说出话：' + msg.slice(0, 120), 'error');
+      console.warn('[小狸Live] 群聊生成失败', e);
     }
   }
   function groupRule(p, g) {
