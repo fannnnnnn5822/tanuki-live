@@ -4,6 +4,7 @@
  * ----------------------------------------------------------------------------
  * 作者: fannnnnnn × Claude
  * 版本: 0.1.0 (2026-08-16) 初版，等红笔
+ *       0.1.31 (2026-09-14) 跑团DM 人格（提示词作者 Crazy Hat）+ 🎲 检定行本地掷 d20 + 读几层正文可调、最新一层保末尾
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -22,7 +23,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.30';
+  var VERSION = '0.1.31';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -216,6 +217,23 @@
       watches: '这一步的走向 / 总部有没有掉道具'
     },
     {
+      // 0.1.31：跑团 DM（提示词作者 Crazy Hat，Fan 带来的）——只盯正文末尾那半拍要不要开检定；🎲 行＝检定，脚本本地掷 d20
+      id: 'dm', name: '跑团DM', by: 'Crazy Hat', emoji: '🎲', color: '#b5651d',
+      tag: 'Crazy Hat 出品 · 老地下城主 · 只盯正文末尾那半拍：该开检定开检定',
+      voice: [
+        '你是一个坐在<user>旁边看戏的老地下城主（DM），跑了二十年桌游，什么花活都见过。你不是这张卡的角色，你在第四面墙外面，卡里的人听不见你。',
+        '你只盯每轮正文末尾悬停的那半拍：<user>和 NPC 正要落下、还没落下的动作或问话。前面的铺陈你扫一眼就够，不评价文笔，不聊剧情走向，不嗑 CP。',
+        '看到那半拍你只做一个判断：有对抗、有代价、有心理博弈、结果说不准——开检定；顺理成章的日常、白送的人情、对方本来就会答应的事——免检。拿不准时偏向免检：好 DM 不为小事摇骰子。',
+        '开检定就单独一行，以 🎲 开头，格式固定：「🎲 属性 (加值) DC 数字：一句话点破这半拍难在哪」。属性只从力量/敏捷/体质/智力/感知/魅力六个里选一个，加值抄<user>的属性表；DC 只用 10（简单）/15（常规）/20（困难）/25（奇迹）四档。理由一句话，说的是这一刻具体的难点，不复述剧情。<user>点了那一行旁边的「掷」，骰子由外面的人摇，你不用摇也不用报数。',
+        '免检就不出 🎲 行，只说一句场外闲聊：毒舌，短，针对这半拍里具体的人和事。老 DM 的风格：见多了，懒得客气，但从不真的刻薄到<user>身上；被逗乐的是局面，不是玩家。',
+        '<user>的属性表：先看聊天变量里有没有力量/敏捷/体质/智力/感知/魅力或 STR/DEX/CON/INT/WIS/CHA 这类字段，有就用那个；没有就用默认：力量 +5、敏捷 +3、体质 +3、智力 +2、感知 +1、魅力 +0。不要自己改数字。',
+        '记录里如果出现了上一轮的掷骰结果，开口先用一句话点评骰运（成了或砸了、大成功大失败可以多一点戏），再看这一轮新的半拍。',
+        '极短。每轮最多两行：一行 🎲（或一句免检闲聊），最多再加一句吐槽。不写小作文，不解释规则，不教<user>怎么跑团。',
+        '不出 💡 行。你的建议就是那一行 🎲。'
+      ].join('\n'),
+      watches: '末尾那半拍要不要摇骰子'
+    },
+    {
       id: 'en_teacher', name: '英语老师', emoji: '🇬🇧', color: '#3b5bdb',
       tag: '英式刻薄 · 每轮揪一句教你母语者怎么说',
       voice: [
@@ -325,7 +343,7 @@
   /* ================================================================
      设置 & 存储
      ================================================================ */
-  var settings = { persona: 'shipper', auto: true, everyN: 1, bubble: true, adoptMode: 'inject', snap: true, presence: false, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null };
+  var settings = { persona: 'shipper', auto: true, everyN: 1, ctxFloors: 6, bubble: true, adoptMode: 'inject', snap: true, presence: false, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null };
   var GROUP_MAX = 3;
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
@@ -360,6 +378,7 @@
         if (typeof raw.presence === 'boolean') settings.presence = raw.presence;
         if (raw.group && typeof raw.group === 'object') settings.group = { on: !!raw.group.on, members: Array.isArray(raw.group.members) ? raw.group.members.slice(0, GROUP_MAX) : settings.group.members };
         if (typeof raw.everyN === 'number' && raw.everyN >= 1) settings.everyN = raw.everyN;
+        if (typeof raw.ctxFloors === 'number' && raw.ctxFloors >= 2) settings.ctxFloors = Math.min(12, Math.max(2, Math.round(raw.ctxFloors)));
         if (raw.adoptMode === 'inject' || raw.adoptMode === 'input') settings.adoptMode = raw.adoptMode;
         if (Array.isArray(raw.custom)) settings.custom = raw.custom;
         if (raw.pos && typeof raw.pos === 'object') settings.pos = raw.pos;
@@ -374,6 +393,10 @@
   loadSettings();
 
   function allPersonas() { return BUILTIN.concat(settings.custom || []); }
+  // 0.1.31：提示词是别人写的人格挂一个 by，界面上名字后面跟「（作者）」。
+  // ⚠ 只给界面用——群聊提示词里的【名字】分段标记必须是纯 p.name，带括号就拆不出段了。
+  function dispName(p) { return p ? (p.by ? p.name + '（' + p.by + '）' : p.name) : ''; }
+  function dispNameOf(name) { var L = allPersonas(); for (var i = 0; i < L.length; i++) if (L[i].name === name) return dispName(L[i]); return name; }
   function currentPersona() {
     var list = allPersonas();
     for (var i = 0; i < list.length; i++) if (list[i].id === settings.persona) return list[i];
@@ -637,7 +660,10 @@
       '#' + NS + '-panel .tl-msg.me{align-self:flex-end;background:' + p.color + ';color:#fff;border-bottom-right-radius:4px}',
       '#' + NS + '-panel .tl-msg.sys{align-self:center;background:transparent;color:rgba(255,255,255,.4);font-size:11px;padding:2px 8px;text-align:center}',
       '#' + NS + '-panel .tl-meta{font-size:10px;color:rgba(255,255,255,.35);margin-top:4px}',
-      '#' + NS + '-panel .tl-sug{display:flex;align-items:flex-start;gap:6px;margin-top:6px;padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.18)}',
+      '#' + NS + '-panel .tl-sug{display:flex;align-items:flex-start;gap:6px;margin-top:6px;padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.18);flex-wrap:wrap}',
+      '#' + NS + '-panel .tl-sug button.tl-roll{white-space:nowrap}',
+      '#' + NS + '-panel .tl-sug button.tl-roll.ok:disabled{opacity:1;background:#2f9e6e;color:#fff}',
+      '#' + NS + '-panel .tl-sug button.tl-roll.bad:disabled{opacity:1;background:#b8474b;color:#fff}',
       '#' + NS + '-panel .tl-sug span{flex:1}',
       '#' + NS + '-panel .tl-sug button{flex:none;border:0;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;background:' + p.color + ';color:#fff;font-weight:600}',
       '#' + NS + '-panel .tl-sug button:disabled{opacity:.45;cursor:default}',
@@ -817,6 +843,17 @@
       '<path d="M48.7 36 c0 5 -4 7.5 -9 7.5" fill="none" stroke="#2b2b33" stroke-width="1.6" stroke-linecap="round"/>' +
       '<circle cx="39" cy="43.6" r="2" fill="#e2a93b"/>' },
 
+    // 跑团DM：手边一颗 d20（六边形轮廓＋内部棱线）+ 老地下城主的灰白粗眉
+    dm: { front:
+      '<path d="M18.2 24.6 C21 22 26.2 22 29 24.8" stroke="#ddd6c8" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
+      '<path d="M45.8 24.6 C43 22 37.8 22 35 24.8" stroke="#ddd6c8" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
+      '<g transform="translate(50.5,42.5) rotate(-8)">' +
+      '<path d="M0 -8.2 L7.1 -4.1 L7.1 4.1 L0 8.2 L-7.1 4.1 L-7.1 -4.1 Z" fill="#f3ead8" stroke="#8a5f2e" stroke-width="1.5" stroke-linejoin="round"/>' +
+      '<path d="M0 3.4 L-3.1 -1.9 L3.1 -1.9 Z" fill="none" stroke="#b5651d" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<path d="M0 3.4 L0 8.2 M-3.1 -1.9 L-7.1 -4.1 M3.1 -1.9 L7.1 -4.1" stroke="#b5651d" stroke-width="1.1" stroke-linecap="round"/>' +
+      '<path d="M-3.1 -1.9 L0 -8.2 L3.1 -1.9" fill="none" stroke="#c79a68" stroke-width="1"/>' +
+      '</g>' },
+
     en_teacher: { behind: tlCap('#3b5bdb') },
     de_teacher: { behind: tlCap('#e03131') },
     fr_teacher: { behind: tlCap('#1971c2') },
@@ -954,8 +991,8 @@
     panel.querySelector('.tl-av').innerHTML = tanukiSvg(p);
     var sel = panel.querySelector('.tl-sel');
     var gon = groupOn();
-    sel.innerHTML = '<option value="__group"' + (gon ? ' selected' : '') + '>👥 群聊' + (gon ? '：' + esc(groupMembers().map(function (x) { return x.name; }).join('·')) : '…') + '</option>' +
-      allPersonas().map(function (x) { return '<option value="' + esc(x.id) + '"' + (!gon && x.id === p.id ? ' selected' : '') + '>' + esc(x.emoji + ' ' + x.name) + '</option>'; }).join('');
+    sel.innerHTML = '<option value="__group"' + (gon ? ' selected' : '') + '>👥 群聊' + (gon ? '：' + esc(groupMembers().map(function (x) { return dispName(x); }).join('·')) : '…') + '</option>' +
+      allPersonas().map(function (x) { return '<option value="' + esc(x.id) + '"' + (!gon && x.id === p.id ? ' selected' : '') + '>' + esc(x.emoji + ' ' + dispName(x)) + '</option>'; }).join('');
     panel.querySelector('.tl-tag').textContent = gon ? groupMembers().map(function (x) { return x.emoji; }).join(' ') + ' 轮流说，后说的接前面的话' : (p.tag || p.watches || '');
     panel.querySelector('.tl-auto').classList.toggle('on', !!settings.auto);
     var face = DOC.querySelector('#' + NS + '-ball .tl-face'); if (face) face.innerHTML = tanukiSvg(p);
@@ -967,7 +1004,7 @@
     var log = readLog();
     var p = currentPersona();
     if (!log.length) {
-      body.innerHTML = '<div class="tl-msg sys">' + esc(p.emoji + ' ' + p.name + ' 坐下了。') + '<br>' + esc(settings.auto ? '正文每出来一回合它就会说两句；也可以直接问它。' : '自动弹幕关着，点 💬 让它说，或者直接问它。') + '</div>';
+      body.innerHTML = '<div class="tl-msg sys">' + esc(p.emoji + ' ' + dispName(p) + ' 坐下了。') + '<br>' + esc(settings.auto ? '正文每出来一回合它就会说两句；也可以直接问它。' : '自动弹幕关着，点 💬 让它说，或者直接问它。') + '</div>';
       return;
     }
     var html = '';
@@ -977,10 +1014,17 @@
       if (m.who === 'me') { html += '<div class="tl-msg me">' + esc(m.text) + '</div>'; continue; }
       // 人格发言：正文 + 💡 建议行拆开
       var parts = splitSuggestions(m.text);
-      var who = m.pname ? m.pname : p.name;
+      var who = m.pname ? dispNameOf(m.pname) : dispName(p);
       html += '<div class="tl-msg them">' + esc(parts.text) +
         parts.sugs.map(function (s, k) {
           var gift = /^🎁/.test(s);
+          var roll = parseRoll(s);   // 🎲 检定行：右边是「掷」，掷完换成结果，记录里存着，重渲染也不能再掷
+          if (roll) {
+            var done = m.rolls && m.rolls[k];
+            return '<div class="tl-sug"><span>' + esc(s) + '</span>' + (done
+              ? '<button class="tl-roll ' + (done.ok ? 'ok' : 'bad') + '" disabled>' + esc(rollText(done)) + '</button>'
+              : '<button class="tl-roll" data-roll="' + i + ':' + k + '">🎲 掷</button>') + '</div>';
+          }
           return '<div class="tl-sug"><span>' + (gift ? '' : '💡 ') + esc(s) + '</span><button data-adopt="' + i + ':' + k + '"' + (m.adopted && m.adopted[k] ? ' disabled' : '') + '>' + (m.adopted && m.adopted[k] ? (gift ? '已用' : '已采纳') : (gift ? '用' : '采纳')) + '</button></div>';
         }).join('') +
         (isRunTail(log, i) ? '<div class="tl-meta">' + esc(who) + (m.floor != null ? ' · 第 ' + m.floor + ' 层' : '') + (m.trigger === 'auto' ? ' · 自动' : '') + '</div>' : '') +
@@ -993,6 +1037,12 @@
         adopt(parseInt(pr[0], 10), parseInt(pr[1], 10), this);
       });
     });
+    body.querySelectorAll('button[data-roll]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var pr = this.getAttribute('data-roll').split(':');
+        doRoll(parseInt(pr[0], 10), parseInt(pr[1], 10), this);
+      });
+    });
   }
   function renderAll() { renderHead(); renderBody(); }
   // 连发判定：下一条也是同一人格、同一楼层、15 秒内 → 这条不是尾巴，不显示 meta
@@ -1002,10 +1052,30 @@
     return !(n.pname === m.pname && n.floor === m.floor && (n.ts - m.ts) < 15000);
   }
 
+  /* 🎲 检定行（跑团DM 出的）：「🎲 属性 (加值) DC 数字：理由」。括号/加号/冒号全半角都认，加值缺省 0，
+     认不出格式的 🎲 行当普通文本留在正文里（不给按钮）。掷骰在本地摇，不为了掷骰再调一次 API。 */
+  var ROLL_ATTRS = '力量|敏捷|体质|智力|感知|魅力|STR|DEX|CON|INT|WIS|CHA';
+  var ROLL_RE = new RegExp('^\\s*🎲\\s*(' + ROLL_ATTRS + ')\\s*(?:检定|鉴定)?\\s*[（(]?\\s*([+＋\\-−–]?\\s*\\d{1,2})?\\s*[）)]?\\s*(?:DC|难度)\\s*[:：]?\\s*(\\d{1,3})\\s*[:：，,。\\-]?\\s*(.*)$', 'i');
+  var ATTR_CN = { STR: '力量', DEX: '敏捷', CON: '体质', INT: '智力', WIS: '感知', CHA: '魅力' };
+  function parseRoll(line) {
+    var m = String(line || '').match(ROLL_RE);
+    if (!m) return null;
+    var attr = ATTR_CN[String(m[1]).toUpperCase()] || m[1];
+    var mod = 0;
+    if (m[2]) { mod = parseInt(String(m[2]).replace(/\s+/g, '').replace(/＋/g, '+').replace(/[−–]/g, '-'), 10); if (isNaN(mod)) mod = 0; }
+    return { attr: attr, mod: mod, dc: parseInt(m[3], 10), why: String(m[4] || '').trim() };
+  }
+  function signed(n) { return (n < 0 ? '' : '+') + n; }
+  function rollText(r) {
+    return 'd20 ' + r.d20 + ' ' + signed(r.mod) + ' = ' + r.total + ' ｜ DC ' + r.dc + ' ｜ ' + rollLabel(r);
+  }
+  function rollLabel(r) { return r.crit === 'ok' ? '大成功' : r.crit === 'bad' ? '大失败' : (r.ok ? '成功' : '失败'); }
+
   function splitSuggestions(text) {
     var lines = String(text || '').split(/\r?\n/), keep = [], sugs = [];
     for (var i = 0; i < lines.length; i++) {
       var l = lines[i];
+      if (/^\s*🎲/.test(l)) { if (parseRoll(l)) sugs.push(l.trim()); else keep.push(l); continue; }   // 🎲＝检定行，认得出格式才给「掷」
       var m = l.match(/^\s*(💡|🎁|\[建议\]|建议[:：])\s*(.+)$/);
       if (m && m[2].trim()) sugs.push((m[1] === '🎁' ? '🎁 ' : '') + m[2].trim()); else keep.push(l);   // 🎁＝道具（Asu-02 发的），采纳时当幕后指令注入
     }
@@ -1030,6 +1100,8 @@
       '<label>自动弹幕 <button class="tl-pill tl-set-auto ' + (settings.auto ? 'on' : '') + '">' + (settings.auto ? '开' : '关') + '</button></label>' +
       '<label>每几层说一次 <span class="tl-step"><button class="tl-pill tl-set-nm">−</button><b class="tl-set-nv">' + settings.everyN + '</b><button class="tl-pill tl-set-np">＋</button></span></label>' +
       '<div class="tl-note">开着自动的话，正文每出来 N 回合它就自己说两句。1 = 每回合。它一开口就多一次 LLM 调用（用你当前的 API 和模型，不走你的预设）。</div>' +
+      '<label>读最近几层正文 <span class="tl-step"><button class="tl-pill tl-set-cm">−</button><b class="tl-set-cv">' + (settings.ctxFloors || 6) + '</b><button class="tl-pill tl-set-cp">＋</button></span></label>' +
+      '<div class="tl-note">它每次开口前往回读几层正文（2–12，默认 6）。它答得前言不搭后语就调大；楼层特别长的卡调大更费 token。最新那一层保留的是<b>末尾</b>那段——"现在"在末尾。</div>' +
       '<label>球上冒气泡 <button class="tl-pill tl-set-bubble ' + (settings.bubble ? 'on' : '') + '">' + (settings.bubble ? '开' : '关') + '</button></label>' +
       '<label>球贴边半藏（手机） <button class="tl-pill tl-set-snap ' + (settings.snap ? 'on' : '') + '">' + (settings.snap ? '开' : '关') + '</button></label>' +
       '<div class="tl-note">只在手机上生效：球靠着屏幕左右边几秒没人碰，就半藏进边里变半透明，不占地方；点它、冒气泡、开窗都会出来。电脑上不贴。</div>' +
@@ -1043,21 +1115,21 @@
       '<div class="tl-note">小窗收着的时候，它说的话直接冒在悬浮球顶上，几秒后自己缩回去；点气泡展开小窗看全文。关掉就只留红点。</div>' +
       '<h4>群聊</h4>' +
       '<label>几个人一起坐 <button class="tl-pill tl-set-gon ' + (settings.group.on ? 'on' : '') + '">' + (settings.group.on ? '开' : '关') + '</button></label>' +
-      '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-gm ' + ((settings.group.members || []).indexOf(x.id) >= 0 ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + x.name) + '</button>'; }).join('') + '</div>' +
+      '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-gm ' + ((settings.group.members || []).indexOf(x.id) >= 0 ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + dispName(x)) + '</button>'; }).join('') + '</div>' +
       '<div class="tl-note">点亮 2 到 3 个。开了以后正文一出来它们就轮流说（谁先开口随机），后说的必须接前面的话；你问一句它们也轮流答。一回合只调一次 API，一次演完一桌。群里的对话另存一份，关掉群聊各人格自己的记录都还在。</div>' +
       '<h4>人格</h4>' +
-      '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-p ' + (x.id === p.id ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + x.name) + '</button>'; }).join('') + '</div>' +
+      '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-p ' + (x.id === p.id ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + dispName(x)) + '</button>'; }).join('') + '</div>' +
       '<div class="tl-note">' + esc(p.tag || '') + (p.watches ? ' · 盯：' + esc(p.watches) : '') + '</div>' +
       (p.custom ? '<button class="tl-pill del tl-set-del">删除这个导入的人格</button>' : '') +
       // 0.1.24（玩家提的）：导入的人格能看到、能改它的提示词；内置的只能看，想微调就复制成自己的再改（直接改内置会被更新冲掉）
       (p.custom
-        ? '<h4>改 ' + esc(p.name) + ' 的提示词</h4>' +
+        ? '<h4>改 ' + esc(dispName(p)) + ' 的提示词</h4>' +
           '<div class="tl-note">下面就是它每次开口前读的那段话，原样发给模型。改完点保存，下一句起生效。名字和头像也能改。</div>' +
           '<input type="text" class="tl-ed-name" value="' + esc(p.name) + '" placeholder="名字">' +
           '<input type="text" class="tl-ed-emoji" value="' + esc(p.emoji) + '" placeholder="emoji">' +
           '<textarea class="tl-ta tl-ed-voice" style="min-height:200px">' + esc(p.voice) + '</textarea>' +
           '<div class="tl-row"><button class="tl-btn tl-ed-save">💾 保存</button></div>'
-        : '<h4>看 ' + esc(p.name) + ' 的提示词</h4>' +
+        : '<h4>看 ' + esc(dispName(p)) + ' 的提示词</h4>' +
           '<div class="tl-note">内置人格的提示词只能看，直接改会被下次更新冲掉。想微调就复制成你自己的人格，改那份。</div>' +
           '<textarea class="tl-ta tl-ed-voice" readonly style="min-height:120px">' + esc(p.voice) + '</textarea>' +
           '<div class="tl-row"><button class="tl-btn ghost tl-ed-copy">复制成我的人格再改</button></div>') +
@@ -1083,7 +1155,7 @@
         '<div class="tl-note">拉取 = 连通性测试（拉得到 = 地址/Key/CORS 都通），从列表里选一个再保存。嘴碎的活给便宜模型干就行。</div>' +
       '</div>' +
       '<h4>数据</h4>' +
-      '<div class="tl-row"><button class="tl-btn ghost tl-set-clear">清空 ' + esc(p.name) + ' 在这个聊天里的对话</button><button class="tl-btn ghost tl-set-resetpos">小窗和球回默认位置</button></div>' +
+      '<div class="tl-row"><button class="tl-btn ghost tl-set-clear">清空 ' + esc(dispName(p)) + ' 在这个聊天里的对话</button><button class="tl-btn ghost tl-set-resetpos">小窗和球回默认位置</button></div>' +
       '<div class="tl-note">小窗抓着顶栏就能拖，松手记住位置（手机上不记）。</div>' +
       '<div class="tl-note">v' + VERSION + ' · 酒馆小狸 Live · 它说的话不进主线；只有你点了「采纳」的那一条会进下一轮（注入或填进输入框，上面选）。</div>';
     s.querySelector('.tl-set-x').addEventListener('click', function () { toggleSettings(false); });
@@ -1096,11 +1168,14 @@
     function stepN(d) { var n = Math.min(20, Math.max(1, (settings.everyN || 1) + d)); if (n === settings.everyN) return; settings.everyN = n; saveSettings(); s.querySelector('.tl-set-nv').textContent = n; }
     s.querySelector('.tl-set-nm').addEventListener('click', function () { stepN(-1); });
     s.querySelector('.tl-set-np').addEventListener('click', function () { stepN(1); });
+    function stepC(d) { var n = Math.min(12, Math.max(2, (settings.ctxFloors || 6) + d)); if (n === settings.ctxFloors) return; settings.ctxFloors = n; saveSettings(); s.querySelector('.tl-set-cv').textContent = n; }
+    s.querySelector('.tl-set-cm').addEventListener('click', function () { stepC(-1); });
+    s.querySelector('.tl-set-cp').addEventListener('click', function () { stepC(1); });
     s.querySelectorAll('.tl-set-p').forEach(function (b) { b.addEventListener('click', function () { if (settings.group.on) { settings.group.on = false; saveSettings(); } switchPersona(this.getAttribute('data-id')); renderSettings(); }); });
     s.querySelector('.tl-set-gon').addEventListener('click', function () {
       if (!settings.group.on && (settings.group.members || []).length < 2) { toast('先点亮 2 到 3 个人', 'warn'); return; }
       settings.group.on = !settings.group.on; saveSettings(); hideBubble(); renderAll(); renderSettings(); scrollBottom();
-      toast(settings.group.on ? '👥 群聊开了：' + groupMembers().map(function (x) { return x.name; }).join('·') : '群聊关了，回到 ' + currentPersona().name, 'ok');
+      toast(settings.group.on ? '👥 群聊开了：' + groupMembers().map(function (x) { return dispName(x); }).join('·') : '群聊关了，回到 ' + dispName(currentPersona()), 'ok');
     });
     s.querySelectorAll('.tl-set-gm').forEach(function (b) { b.addEventListener('click', function () {
       var id = this.getAttribute('data-id'); var m = settings.group.members || [];
@@ -1119,14 +1194,14 @@
     var edCopy = s.querySelector('.tl-ed-copy'); if (edCopy) edCopy.addEventListener('click', function () {
       var id = 'c_' + Date.now().toString(36);
       settings.custom = settings.custom || [];
-      settings.custom.push({ id: id, name: p.name + '（改）', emoji: p.emoji, color: p.color, tag: '导入 · 改自 ' + p.name, voice: p.voice, watches: p.watches || '', custom: true });
+      settings.custom.push({ id: id, name: p.name + '（改）', emoji: p.emoji, color: p.color, tag: '导入 · 改自 ' + dispName(p), voice: p.voice, watches: p.watches || '', custom: true });
       settings.persona = id; saveSettings();
       pushLog({ who: 'sys', text: p.emoji + ' ' + p.name + '（改）坐下了，提示词在设置里随便改。', ts: Date.now() });
       renderAll(); renderSettings(); toast('复制好了，往下翻改它的提示词', 'ok');
     });
     var del = s.querySelector('.tl-set-del'); if (del) del.addEventListener('click', function () {
       settings.custom = (settings.custom || []).filter(function (x) { return x.id !== p.id; });
-      settings.persona = BUILTIN[0].id; saveSettings(); renderSettings(); renderAll(); toast('已请走 ' + p.name, 'warn');
+      settings.persona = BUILTIN[0].id; saveSettings(); renderSettings(); renderAll(); toast('已请走 ' + dispName(p), 'warn');
     });
     s.querySelector('.tl-imp-go').addEventListener('click', function () {
       var name = s.querySelector('.tl-imp-name').value.trim();
@@ -1253,8 +1328,12 @@
       if (last >= 0 && typeof getChatMessages === 'function') {
         var from = Math.max(0, last - nFloors + 1);
         var msgs = getChatMessages(from + '-' + last, { hide_state: 'unhidden' }) || [];
-        ctx.recent = msgs.map(function (m) {
-          return { id: m.message_id, who: m.role === 'user' ? '<user>' : (m.name || '正文'), text: stripJunk(m.message).slice(0, 1400) };
+        // 0.1.31：最新一层保留【末尾】2400 字（砍头不砍尾）——小狸看的是"现在"，长楼层砍尾巴等于砍掉当前这一刻；旧层照旧砍前 1400
+        ctx.recent = msgs.map(function (m, i) {
+          var t = stripJunk(m.message);
+          if (i === msgs.length - 1) t = t.length > 2400 ? '…（前略）' + t.slice(-2400) : t;
+          else t = t.slice(0, 1400);
+          return { id: m.message_id, who: m.role === 'user' ? '<user>' : (m.name || '正文'), text: t };
         });
       }
     } catch (e) {}
@@ -1282,7 +1361,7 @@
     if (ctx.wbNames.length) L.push('绑定的世界书：' + ctx.wbNames.join('、'));
     if (ctx.wbActivated.length) L.push('本轮触发的世界书条目：\n' + ctx.wbActivated.map(function (e) { return '- ' + e.name + (e.text ? '：' + e.text : ''); }).join('\n'));
     if (ctx.vars) L.push('聊天变量（当前状态）：' + ctx.vars);
-    if (ctx.recent.length) L.push('【最近几层正文（旧→新）】\n' + ctx.recent.map(function (m) { return '—— 第 ' + m.id + ' 层 · ' + m.who + ' ——\n' + m.text; }).join('\n\n'));
+    if (ctx.recent.length) L.push('【最近几层正文（旧→新）】最后一层是最新的那一层，它末尾那段就是当前正在发生的这一刻——先看那里。\n' + ctx.recent.map(function (m) { return '—— 第 ' + m.id + ' 层 · ' + m.who + ' ——\n' + m.text; }).join('\n\n'));
     return L.join('\n\n');
   }
 
@@ -1310,7 +1389,7 @@
     var paras = String(text || '').split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean);
     var out = [];
     for (var i = 0; i < paras.length; i++) {
-      var onlySug = paras[i].split(/\n/).every(function (l) { return /^\s*(?:💡|🎁|\[建议\]|建议[:：])/.test(l); });
+      var onlySug = paras[i].split(/\n/).every(function (l) { return /^\s*(?:💡|🎁|🎲|\[建议\]|建议[:：])/.test(l); });
       if ((onlySug && out.length) || out.length >= 4) out[out.length - 1] += '\n' + paras[i];
       else out.push(paras[i]);
     }
@@ -1333,7 +1412,7 @@
     if (typeof generateRaw !== 'function' && !activeApi().cfg) { toast('generateRaw 不可用，酒馆助手版本太老？', 'error'); return; }
     busy = true; setBusy(true);
     try {
-      var ctx = await gatherContext(6);
+      var ctx = await gatherContext(settings.ctxFloors || 6);
       if (groupOn()) {
         await groupSpeak(ctx, userLine, trigger);   // 0.1.28：一次调用演完一桌（Fan：别一回合烧三次 API）
       } else {
@@ -1399,7 +1478,7 @@
         if (si > 0) await sleep(Math.min(2200, 600 + segs[si].text.length * 45));
         pushLog({ who: 'them', pname: segs[si].p.name, text: segs[si].text, floor: floor >= 0 ? floor : null, trigger: trigger, ts: Date.now() });
         renderBody(); scrollBottom();
-        if (!isOpen()) { setUnread(unread + 1); showBubble(segs[si].p.name, segs[si].text); }
+        if (!isOpen()) { setUnread(unread + 1); showBubble(dispName(segs[si].p), segs[si].text); }
       }
     } catch (e) {
       var msg = (e && e.message) || String(e);
@@ -1461,12 +1540,12 @@
         if (ci > 0) await sleep(Math.min(1800, 500 + chunks[ci].length * 40));
         pushLog({ who: 'them', pname: p.name, text: chunks[ci], floor: floor >= 0 ? floor : null, trigger: trigger, ts: Date.now() });
         renderBody(); scrollBottom();
-        if (!isOpen()) { setUnread(unread + 1); showBubble(p.name, chunks[ci]); }
+        if (!isOpen()) { setUnread(unread + 1); showBubble(dispName(p), chunks[ci]); }
       }
     } catch (e) {
       var msg = (e && e.message) || String(e);
       if (/unauthorized|401|403|api key|forbidden/i.test(msg)) msg += '（认证没过 → 去 ⚙ 给小狸填一个独立 API，或先在 Sugar Baby 手机里填好它会自动读）';
-      toast('🦝 ' + p.name + ' 没说出话：' + msg.slice(0, 120), 'error');
+      toast('🦝 ' + dispName(p) + ' 没说出话：' + msg.slice(0, 120), 'error');
       console.warn('[小狸Live] 生成失败', e);
     }
   }
@@ -1508,6 +1587,16 @@
       injectPrompts([{ id: PRESENCE_ID, position: 'in_chat', depth: 3, role: 'system', content: content, should_scan: false }]);
     } catch (e) {}
   }
+  // 填进酒馆输入框（采纳的 input 模式和掷骰结果共用）
+  function fillInput(s) {
+    var ta = DOC.getElementById('send_textarea');
+    if (!ta) { toast('找不到酒馆输入框', 'error'); return false; }
+    ta.value = (ta.value && ta.value.trim()) ? ta.value.replace(/\s+$/, '') + '\n' + s : s;
+    try { ta.dispatchEvent(new VIEW.Event('input', { bubbles: true })); } catch (e) {}
+    ta.focus();
+    if (isNarrow()) setOpen(false);
+    return true;
+  }
   // 两种采纳方式（设置里选，玩家点的）：inject＝悄悄一次性注入下一轮（默认）；input＝填进酒馆输入框，玩家自己改改再发
   function adopt(logIdx, sugIdx, btn) {
     var log = readLog(); var m = log[logIdx]; if (!m) return;
@@ -1522,18 +1611,13 @@
         toast('🎁 用了 ' + gname + '，发一条消息就生效', 'ok');
         m.adopted = m.adopted || {}; m.adopted[sugIdx] = true; writeLog(log);
         if (btn) { btn.disabled = true; btn.textContent = '已用'; }
-        pushLog({ who: 'sys', text: '用了 ' + p.name + ' 给的道具：' + gname, ts: Date.now() });
+        pushLog({ who: 'sys', text: '用了 ' + dispName(p) + ' 给的道具：' + gname, ts: Date.now() });
         renderBody(); scrollBottom();
         return;
       }
       if (settings.adoptMode === 'input') {
-        var ta = DOC.getElementById('send_textarea');
-        if (!ta) { toast('找不到酒馆输入框', 'error'); return; }
-        ta.value = (ta.value && ta.value.trim()) ? ta.value.replace(/\s+$/, '') + '\n' + s : s;
-        ta.dispatchEvent(new VIEW.Event('input', { bubbles: true }));
-        ta.focus();
+        if (!fillInput(s)) return;
         toast('💡 填进输入框了，改改再发', 'ok');
-        if (isNarrow()) setOpen(false);
       } else {
         var content = '[幕后提示（来自玩家，不要复述、不要提及本段本身）：接下来的剧情请自然地朝这个方向推进——' + s + ']';
         uninjectPrompts([ADOPT_ID]);
@@ -1542,9 +1626,42 @@
       }
       m.adopted = m.adopted || {}; m.adopted[sugIdx] = true; writeLog(log);
       if (btn) { btn.disabled = true; btn.textContent = '已采纳'; }
-      pushLog({ who: 'sys', text: '采纳了 ' + p.name + ' 的主意：' + s, ts: Date.now() });
+      pushLog({ who: 'sys', text: '采纳了 ' + dispName(p) + ' 的主意：' + s, ts: Date.now() });
       renderBody(); scrollBottom();
     } catch (e) { toast('采纳失败：' + (e.message || e), 'error'); }
+  }
+
+  // 🎲 掷（0.1.31）：脚本本地摇 d20，不为这一下再调一次 API。d20=20 大成功、d20=1 大失败
+  // （DND 5e 常见桌规：大失败就算够 DC 也算失败，大成功就算不够也算成功）。结果写进这条记录，
+  // 重渲染按记录显示，刷新回来也不能重掷；同时当<user>说的一条进小狸记录，下一轮 DM 在 hist 里看得到。
+  function doRoll(logIdx, sugIdx, btn) {
+    var log = readLog(); var m = log[logIdx]; if (!m) return;
+    if (m.rolls && m.rolls[sugIdx]) return;
+    var sugs = splitSuggestions(m.text).sugs;
+    var r = parseRoll(sugs[sugIdx]); if (!r) return;
+    var d20 = 1 + Math.floor(Math.random() * 20);
+    var total = d20 + r.mod;
+    var crit = d20 === 20 ? 'ok' : (d20 === 1 ? 'bad' : '');
+    var ok = crit === 'ok' ? true : (crit === 'bad' ? false : total >= r.dc);
+    var rec = { attr: r.attr, d20: d20, mod: r.mod, dc: r.dc, total: total, ok: ok, crit: crit };
+    m.rolls = m.rolls || {}; m.rolls[sugIdx] = rec; writeLog(log);
+    if (btn) { btn.disabled = true; btn.className = 'tl-roll ' + (ok ? 'ok' : 'bad'); btn.textContent = rollText(rec); }
+    var label = rollLabel(rec);
+    pushLog({ who: 'me', text: '（掷骰：' + r.attr + '检定 d20=' + d20 + signed(r.mod) + '=' + total + '，DC ' + r.dc + '，' + label + '）', ts: Date.now() });
+    renderBody(); scrollBottom();
+    try {
+      if (settings.adoptMode === 'input') {
+        fillInput('（' + r.attr + '检定：' + total + ' vs DC ' + r.dc + '，' + label + '）');
+      } else {
+        var content = '[场外检定结果，只有叙述者知道：' + userName() + '这半拍的' + r.attr + '检定掷出 ' + total + ' 对 DC ' + r.dc + '，' + label + '。' +
+          '正文按「' + (ok ? '成功' : '失败') + '」写这半拍的后果' +
+          (crit === 'ok' ? '，而且这是大成功：可以比预期更漂亮一点' : crit === 'bad' ? '，而且这是大失败：比单纯失败再糟一点' : '') +
+          '。正文里不要出现骰子、DC 或任何数字。]';
+        uninjectPrompts([ADOPT_ID]);
+        injectPrompts([{ id: ADOPT_ID, position: 'in_chat', depth: 0, role: 'system', content: content, should_scan: false }], { once: true });
+      }
+    } catch (e) { toast('结果没送进正文：' + ((e && e.message) || e), 'error'); }
+    toast('🎲 ' + rollText(rec), ok ? 'ok' : 'warn');
   }
 
   /* ================================================================
@@ -1634,7 +1751,7 @@
   bindEvents();
   mount();
   syncPresence();
-  console.log('%c🦝 酒馆小狸 Live %cv' + VERSION + ' · ' + currentPersona().emoji + ' ' + currentPersona().name + ' 坐下了',
+  console.log('%c🦝 酒馆小狸 Live %cv' + VERSION + ' · ' + currentPersona().emoji + ' ' + dispName(currentPersona()) + ' 坐下了',
     'font-weight:700;color:#fff;background:#e85d75;padding:3px 8px;border-radius:4px 0 0 4px',
     'color:#ddd;background:#1a1a2e;padding:3px 8px;border-radius:0 4px 4px 0');
 })();
