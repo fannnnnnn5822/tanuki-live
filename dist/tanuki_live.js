@@ -6,6 +6,13 @@
  * 版本: 0.1.0 (2026-08-16) 初版，等红笔
  *       0.1.31 (2026-09-14) 跑团DM 人格（提示词作者 Crazy Hat）+ 🎲 检定行本地掷 d20 + 读几层正文可调、最新一层保末尾
  *       0.1.32 (2026-09-14) Fan：别做 token 限制——正文整层、角色描述、persona、变量全部不截断（要省就少读几层）
+ *       0.1.33 (2026-09-14) 玩家报「问它现在什么剧情，它以为你们的聊天就是剧情」：正文清洗整块删 HTML 注释和
+ *                           思维/草稿容器（流水线脚手架不是剧情）、删标签不再吞正文；正文块挪到对话记录之后（最贴提问）
+ *                           并明写「正文才是剧情、我们的来回是场外闲聊」；设置页加「👁 它这轮看到了什么」自检
+ *       0.1.34 (2026-09-14) 玩家两条：群聊上限 3 → 6；模型把角色搞混、串声线 → 每个成员一条独立 system（点名"旁边还有谁、
+ *                           不替他们开口"）+ 总规则写死输出格式（段首【名字】单独一行、一段只有一个人、名单外的名字不许出现）
+ *                           + 开口顺序行带 emoji 和 tag；拆段器认五种段头、名单外的名字整段丢掉、同人连续段合并、段内换人切开；
+ *                           群聊气泡按说话人上色（3px 竖线 + 落款 emoji 名字）
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -24,7 +31,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.32';
+  var VERSION = '0.1.34';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -220,7 +227,7 @@
     {
       // 0.1.31：跑团 DM（提示词作者 Crazy Hat，Fan 带来的）——只盯正文末尾那半拍要不要开检定；🎲 行＝检定，脚本本地掷 d20
       id: 'dm', name: '跑团DM', by: 'Crazy Hat', emoji: '🎲', color: '#b5651d',
-      tag: 'Crazy Hat 出品 · 老地下城主 · 只盯正文末尾那半拍：该开检定开检定',
+      tag: '老地下城主 · 只盯正文末尾那半拍：该开检定开检定 · Crazy Hat 出品',
       voice: [
         '你是一个坐在<user>旁边看戏的老地下城主（DM），跑了二十年桌游，什么花活都见过。你不是这张卡的角色，你在第四面墙外面，卡里的人听不见你。',
         '你只盯每轮正文末尾悬停的那半拍：<user>和 NPC 正要落下、还没落下的动作或问话。前面的铺陈你扫一眼就够，不评价文笔，不聊剧情走向，不嗑 CP。',
@@ -345,7 +352,7 @@
      设置 & 存储
      ================================================================ */
   var settings = { persona: 'shipper', auto: true, everyN: 1, ctxFloors: 6, bubble: true, adoptMode: 'inject', snap: true, presence: false, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null };
-  var GROUP_MAX = 3;
+  var GROUP_MAX = 6;   // 0.1.34：玩家说 3 个不够坐（上限只在这里写一次，别再往别处抄数字）
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
   var API_KEY_LS = NS + '-api';
@@ -397,7 +404,8 @@
   // 0.1.31：提示词是别人写的人格挂一个 by，界面上名字后面跟「（作者）」。
   // ⚠ 只给界面用——群聊提示词里的【名字】分段标记必须是纯 p.name，带括号就拆不出段了。
   function dispName(p) { return p ? (p.by ? p.name + '（' + p.by + '）' : p.name) : ''; }
-  function dispNameOf(name) { var L = allPersonas(); for (var i = 0; i < L.length; i++) if (L[i].name === name) return dispName(L[i]); return name; }
+  function personaOf(name) { var L = allPersonas(); for (var i = 0; i < L.length; i++) if (L[i].name === name) return L[i]; return null; }
+  function dispNameOf(name) { var x = personaOf(name); return x ? dispName(x) : name; }
   function currentPersona() {
     var list = allPersonas();
     for (var i = 0; i < list.length; i++) if (list[i].id === settings.persona) return list[i];
@@ -661,6 +669,8 @@
       '#' + NS + '-panel .tl-msg.me{align-self:flex-end;background:' + p.color + ';color:#fff;border-bottom-right-radius:4px}',
       '#' + NS + '-panel .tl-msg.sys{align-self:center;background:transparent;color:rgba(255,255,255,.4);font-size:11px;padding:2px 8px;text-align:center}',
       '#' + NS + '-panel .tl-meta{font-size:10px;color:rgba(255,255,255,.35);margin-top:4px}',
+      // 0.1.34：群聊里每条消息的竖线和落款颜色是行内样式（每条一个人一个色），这里只管落款重一点好认
+      '#' + NS + '-panel .tl-msg.them.tl-gm .tl-meta{font-weight:700;opacity:.95}',
       '#' + NS + '-panel .tl-sug{display:flex;align-items:flex-start;gap:6px;margin-top:6px;padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.18);flex-wrap:wrap}',
       '#' + NS + '-panel .tl-sug button.tl-roll{white-space:nowrap}',
       '#' + NS + '-panel .tl-sug button.tl-roll.ok:disabled{opacity:1;background:#2f9e6e;color:#fff}',
@@ -689,6 +699,8 @@
       '#' + NS + '-panel .tl-set .tl-pill.del{border-color:rgba(255,100,100,.4);color:#f99}',
       '#' + NS + '-panel .tl-set .tl-btn{border:0;border-radius:9px;padding:8px 12px;font-size:12px;cursor:pointer;background:' + p.color + ';color:#fff;font-weight:600}',
       '#' + NS + '-panel .tl-set .tl-btn.ghost{background:rgba(255,255,255,.08);color:#ddd}',
+      // 0.1.33：自检口「它这轮看到了什么」——原样摊开的 contextBlock，自己能滚，不许撑破面板
+      '#' + NS + '-panel .tl-set .tl-pre{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.35) !important;color:#dfe3ea !important;-webkit-text-fill-color:#dfe3ea;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:10px;font-family:ui-monospace,Menlo,Consolas,"PingFang SC",monospace;font-size:11px;line-height:1.5;-webkit-overflow-scrolling:touch;user-select:text}',
       '#' + NS + '-panel .tl-mask{-webkit-text-security:disc}',
       '@media (max-width:500px){#' + NS + '-panel{border-radius:14px}}'
     ].join('\n');
@@ -927,7 +939,7 @@
     panel.querySelector('.tl-sel').addEventListener('change', function () {
       var v = this.value;
       if (v === '__group') {
-        if ((settings.group.members || []).length < 2) { toast('先去 ⚙ 里选 2 到 3 个人', 'warn'); renderHead(); toggleSettings(true); return; }
+        if ((settings.group.members || []).length < 2) { toast('先去 ⚙ 里选 2 到 ' + GROUP_MAX + ' 个人', 'warn'); renderHead(); toggleSettings(true); return; }
         settings.group.on = true; saveSettings(); hideBubble(); renderAll(); scrollBottom(); return;
       }
       if (settings.group.on) { settings.group.on = false; saveSettings(); }
@@ -1016,7 +1028,10 @@
       // 人格发言：正文 + 💡 建议行拆开
       var parts = splitSuggestions(m.text);
       var who = m.pname ? dispNameOf(m.pname) : dispName(p);
-      html += '<div class="tl-msg them">' + esc(parts.text) +
+      // 0.1.34：群聊时每条按说话人上色——左边 3px 竖线 + 落款「emoji 名字」也是这个色（单人模式不动）
+      var gp = (groupOn() && m.pname) ? personaOf(m.pname) : null;
+      html += '<div class="tl-msg them' + (gp ? ' tl-gm' : '') + '"' +
+        (gp ? ' data-pid="' + esc(gp.id) + '" style="border-left:3px solid ' + esc(gp.color) + '"' : '') + '>' + esc(parts.text) +
         parts.sugs.map(function (s, k) {
           var gift = /^🎁/.test(s);
           var roll = parseRoll(s);   // 🎲 检定行：右边是「掷」，掷完换成结果，记录里存着，重渲染也不能再掷
@@ -1028,7 +1043,7 @@
           }
           return '<div class="tl-sug"><span>' + (gift ? '' : '💡 ') + esc(s) + '</span><button data-adopt="' + i + ':' + k + '"' + (m.adopted && m.adopted[k] ? ' disabled' : '') + '>' + (m.adopted && m.adopted[k] ? (gift ? '已用' : '已采纳') : (gift ? '用' : '采纳')) + '</button></div>';
         }).join('') +
-        (isRunTail(log, i) ? '<div class="tl-meta">' + esc(who) + (m.floor != null ? ' · 第 ' + m.floor + ' 层' : '') + (m.trigger === 'auto' ? ' · 自动' : '') + '</div>' : '') +
+        (isRunTail(log, i) ? '<div class="tl-meta"' + (gp ? ' style="color:' + esc(gp.color) + '"' : '') + '>' + esc((gp ? gp.emoji + ' ' : '') + who) + (m.floor != null ? ' · 第 ' + m.floor + ' 层' : '') + (m.trigger === 'auto' ? ' · 自动' : '') + '</div>' : '') +
         '</div>';
     }
     body.innerHTML = html;
@@ -1102,7 +1117,11 @@
       '<label>每几层说一次 <span class="tl-step"><button class="tl-pill tl-set-nm">−</button><b class="tl-set-nv">' + settings.everyN + '</b><button class="tl-pill tl-set-np">＋</button></span></label>' +
       '<div class="tl-note">开着自动的话，正文每出来 N 回合它就自己说两句。1 = 每回合。它一开口就多一次 LLM 调用（用你当前的 API 和模型，不走你的预设）。</div>' +
       '<label>读最近几层正文 <span class="tl-step"><button class="tl-pill tl-set-cm">−</button><b class="tl-set-cv">' + (settings.ctxFloors || 6) + '</b><button class="tl-pill tl-set-cp">＋</button></span></label>' +
-      '<div class="tl-note">它每次开口前往回读几层正文（2–12，默认 6）。它答得前言不搭后语就调大；楼层特别长的卡调大更费 token。最新那一层保留的是<b>末尾</b>那段——"现在"在末尾。</div>' +
+      '<div class="tl-note">它每次开口前往回读几层正文（2–12，默认 6）。它答得前言不搭后语就调大；楼层特别长的卡调大更费 token。最新那一层就是"现在"，末尾那段是当前这一刻。</div>' +
+      // 0.1.33：玩家说「它根本没读到正文」时，让玩家自己看一眼它到底拿到了什么（截图就能报）
+      '<div class="tl-row"><button class="tl-btn ghost tl-set-peek">👁 它这轮看到了什么</button></div>' +
+      '<div class="tl-note">点一下，把它下一次开口时读到的东西原样摊开给你看（卡的描述、你的 persona、变量、世界书、最近几层正文清洗后的样子）。它答非所问、或者说"没看到正文"的时候，先看这里——截图发给作者最省事。</div>' +
+      '<div class="tl-peek"></div>' +
       '<label>球上冒气泡 <button class="tl-pill tl-set-bubble ' + (settings.bubble ? 'on' : '') + '">' + (settings.bubble ? '开' : '关') + '</button></label>' +
       '<label>球贴边半藏（手机） <button class="tl-pill tl-set-snap ' + (settings.snap ? 'on' : '') + '">' + (settings.snap ? '开' : '关') + '</button></label>' +
       '<div class="tl-note">只在手机上生效：球靠着屏幕左右边几秒没人碰，就半藏进边里变半透明，不占地方；点它、冒气泡、开窗都会出来。电脑上不贴。</div>' +
@@ -1117,7 +1136,8 @@
       '<h4>群聊</h4>' +
       '<label>几个人一起坐 <button class="tl-pill tl-set-gon ' + (settings.group.on ? 'on' : '') + '">' + (settings.group.on ? '开' : '关') + '</button></label>' +
       '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-gm ' + ((settings.group.members || []).indexOf(x.id) >= 0 ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + dispName(x)) + '</button>'; }).join('') + '</div>' +
-      '<div class="tl-note">点亮 2 到 3 个。开了以后正文一出来它们就轮流说（谁先开口随机），后说的必须接前面的话；你问一句它们也轮流答。一回合只调一次 API，一次演完一桌。群里的对话另存一份，关掉群聊各人格自己的记录都还在。</div>' +
+      '<div class="tl-note">点亮 2 到 ' + GROUP_MAX + ' 个。开了以后正文一出来它们就轮流说（谁先开口随机），后说的必须接前面的话；你问一句它们也轮流答。一回合只调一次 API，一次演完一桌。群里的对话另存一份，关掉群聊各人格自己的记录都还在。</div>' +
+      '<div class="tl-note">⚠ 人越多，每轮越长、串得越厉害（几个人的声线混在一起、名字标错）。4 个以上建议换个聪明点的模型；嫌乱就减到 2–3 个。</div>' +
       '<h4>人格</h4>' +
       '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-p ' + (x.id === p.id ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + dispName(x)) + '</button>'; }).join('') + '</div>' +
       '<div class="tl-note">' + esc(p.tag || '') + (p.watches ? ' · 盯：' + esc(p.watches) : '') + '</div>' +
@@ -1172,9 +1192,37 @@
     function stepC(d) { var n = Math.min(12, Math.max(2, (settings.ctxFloors || 6) + d)); if (n === settings.ctxFloors) return; settings.ctxFloors = n; saveSettings(); s.querySelector('.tl-set-cv').textContent = n; }
     s.querySelector('.tl-set-cm').addEventListener('click', function () { stepC(-1); });
     s.querySelector('.tl-set-cp').addEventListener('click', function () { stepC(1); });
+    // 0.1.33：「👁 它这轮看到了什么」——跑一遍 gatherContext，把 contextBlock 全文摊在面板里（可滚动，再点收起）
+    s.querySelector('.tl-set-peek').addEventListener('click', async function () {
+      var box = s.querySelector('.tl-peek'); if (!box) return;
+      if (box.getAttribute('data-open') === '1') { box.removeAttribute('data-open'); box.innerHTML = ''; return; }
+      box.setAttribute('data-open', '1');
+      box.innerHTML = '<div class="tl-note">正在看……</div>';
+      var full = '';
+      try {
+        var ctx = await gatherContext(settings.ctxFloors || 6);
+        full = contextBlock(ctx);
+      } catch (e) {
+        box.innerHTML = '<div class="tl-note">没读出来：' + esc((e && e.message) || String(e)) + '</div>';
+        return;
+      }
+      if (!box.getAttribute('data-open')) return;
+      var n = 0; try { n = (full.match(/—— 第 \d+ 层/g) || []).length; } catch (e2) {}
+      box.innerHTML = '<div class="tl-note">下面就是它下一次开口时读到的全部内容（' + full.length + ' 字 · ' + n + ' 层正文）。一个字没读到正文的话，这里就会是空的。</div>' +
+        '<pre class="tl-pre">' + esc(full) + '</pre>' +
+        '<div class="tl-row"><button class="tl-pill tl-peek-x">收起</button><button class="tl-pill tl-peek-copy">复制全文</button></div>';
+      box.querySelector('.tl-peek-x').addEventListener('click', function () { box.removeAttribute('data-open'); box.innerHTML = ''; });
+      box.querySelector('.tl-peek-copy').addEventListener('click', function () {
+        try {
+          if (VIEW.navigator && VIEW.navigator.clipboard && VIEW.navigator.clipboard.writeText) {
+            VIEW.navigator.clipboard.writeText(full).then(function () { toast('复制好了', 'ok'); }, function () { toast('复制不了，长按 pre 里的文字选中吧', 'warn'); });
+          } else toast('这个浏览器不给复制，截图吧', 'warn');
+        } catch (e3) { toast('复制不了，截图吧', 'warn'); }
+      });
+    });
     s.querySelectorAll('.tl-set-p').forEach(function (b) { b.addEventListener('click', function () { if (settings.group.on) { settings.group.on = false; saveSettings(); } switchPersona(this.getAttribute('data-id')); renderSettings(); }); });
     s.querySelector('.tl-set-gon').addEventListener('click', function () {
-      if (!settings.group.on && (settings.group.members || []).length < 2) { toast('先点亮 2 到 3 个人', 'warn'); return; }
+      if (!settings.group.on && (settings.group.members || []).length < 2) { toast('先点亮 2 到 ' + GROUP_MAX + ' 个人', 'warn'); return; }
       settings.group.on = !settings.group.on; saveSettings(); hideBubble(); renderAll(); renderSettings(); scrollBottom();
       toast(settings.group.on ? '👥 群聊开了：' + groupMembers().map(function (x) { return dispName(x); }).join('·') : '群聊关了，回到 ' + dispName(currentPersona()), 'ok');
     });
@@ -1281,12 +1329,22 @@
      它看得到的东西：上下文采集
      ================================================================ */
   var activatedEntries = [];   // 本轮世界书触发（WORLD_INFO_ACTIVATED 抓的）
+  // 0.1.33（玩家报的）：有人的正文每段前面挂一个几百字的多行 HTML 注释（大纲/草稿/一串"开启XX √"的流水线脚手架）。
+  // 旧写法 <[^>]{1,200}> 对它无能为力：注释长过 200 字就整块留下，小狸满眼脚手架看不见剧情；
+  // 而 [^>] 能跨行，又会把正文里两个尖括号之间的字一口吞掉（"窗外<一辆车>开过去" → "窗外开过去"）。
+  // 现在的顺序：整块删注释 → 整块删思维/草稿容器（内容一起删，那是模型的草稿不是剧情）→ 围栏换 [代码块]
+  //           → 剩下的标签只删标签留内容，且不许跨行（<content>、<DRAFTINKG> 这种壳子里装的就是正文）。
+  // ⚠ 状态栏 [Time|…] 这类方括号块故意不剥：那是卡的变量信息，小狸该看见（它自己复述才剥，见 cleanReply）。
+  var THINK_TAGS = 'thinking|think|thought|cot|analysis|plan|scratchpad|reasoning|draft';
+  var RE_THINK = new RegExp('<(' + THINK_TAGS + ')(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>', 'gi');
   function stripJunk(s) {
     return String(s || '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(RE_THINK, '')
       .replace(/```[a-z]*\n[\s\S]*?```/gi, '[代码块]')
-      .replace(/<[^>]{1,200}>/g, '')
+      .replace(/<[^>\n]{1,300}>/g, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
@@ -1351,6 +1409,11 @@
   }
   function contextBlock(ctx) {
     var L = [];
+    // 0.1.33（玩家报的）：问它「现在是什么剧情」，它把你们俩的场外闲聊当成了剧情——因为聊天记录是真的 user/assistant 轮次，
+    // 正文反而只是一段 system。先把"什么是剧情"说死，再把正文块挪到记录之后（见 speak / groupSpeak）。
+    if (ctx.recent.length) L.push('【先分清两样东西】下面【最近几层正文】里的内容才是剧情、才是故事本身——那是<user>正在玩的这张卡里真正发生的事。' +
+      '再往后那些 user / assistant 的来回，是你和<user>在第四面墙外的场外闲聊，不是剧情，也不是故事的一部分。' +
+      '<user>问「现在是什么剧情 / 刚才发生了什么 / 讲讲现在的情况」，问的一律是正文那条线，不是你们俩刚才聊的话。');
     L.push('【你眼前的这张卡】');
     L.push('角色：' + (ctx.charName || '(未知)') + (ctx.charDesc ? '\n' + ctx.charDesc : ''));
     if (ctx.persona) L.push('<user>的 persona：' + ctx.persona);
@@ -1367,7 +1430,9 @@
      ================================================================ */
   var busy = false, lastAutoKey = '', autoCounter = 0, pendingAuto = false;
   var RULES = [
-    '【你现在的处境】你坐在<user>旁边，看<user>玩上面这张卡。你在第四面墙外面：卡里的人听不见你，你也不是卡里的谁。你直接对<user>说话（叫<user>"你"）。',
+    '【你现在的处境】你坐在<user>旁边，看<user>玩这张卡。你在第四面墙外面：卡里的人听不见你，你也不是卡里的谁。你直接对<user>说话（叫<user>"你"）。',
+    // 0.1.33：玩家报「问它现在什么剧情，它以为我们俩的聊天就是剧情」——contextBlock 里也写了一遍，这里是规则侧的同一条
+    '【剧情＝正文，不是我们的聊天】"剧情""故事""现在发生的事"只指【最近几层正文】里的内容。你和<user>之间的这些来回是第四面墙外的场外闲聊，永远不算剧情。<user>问「现在什么剧情 / 刚刚发生了什么 / 到哪儿了」，你答的是正文那条线；你们聊过什么不是答案。',
     '【怎么说】',
     '- 短。像坐旁边随口说，不是写评论。自动弹幕一共 ≤ 80 字；<user>问你问题时可以到 250 字，但仍然是说话不是写文。',
     '- 像真人发消息：想说的不止一句时可以分成 1～3 条发，每条之间空一行；每条都是一口气说完的一句或两句话。大多数时候一条就够。',
@@ -1422,60 +1487,126 @@
       if (pendingAuto) { pendingAuto = false; if (settings.auto) setTimeout(function () { if (!busy) talk('', 'auto'); }, 600); }
     }
   }
-  // 群聊：一次调用，模型同时演所有人，按【名字】分段；脚本定开口顺序（随机），拆段后按人格分别入记录
+  // tag 只取「 · 」前面那半截当一句话标签（'纯 CP 粉 · 零建设性' → '纯 CP 粉'）；没 tag 就退到 watches
+  function shortTag(x) { return String((x && (x.tag || x.watches)) || '').split(' · ')[0].trim(); }
+  // 群聊拆段（0.1.34 重写）。认这几种段头，都必须在行首、名字对得上名单里的某一个：
+  //   【名字】 / 【名字】： / 【名字】: / **名字**： / 名字：   （半角 [名字] 也认）
+  // 名字后面同一行还有正文的，把段头剥掉、正文留下当这一段的第一行。
+  // 整段没有段头 → 归上一个说话的人。段头写了名单外的名字（旁白/系统/主持人这种）→ 这一段整段丢掉并 warn，不入记录不显示。
+  // 同一个人连着两段 → 合并成一条记录。空段（剥掉段头什么都不剩）丢掉。
+  // 段中间冒出别人名字开头的行（模型换人没另起段）→ 就在那一行前面切开当新段。
+  function splitGroupSegments(text, members) {
+    // 名字比对：先原样精确匹配；对不上就洗掉 emoji、空白、标点和「（作者）」这种尾巴再比一次（【跑团DM（Crazy Hat）】也要认得出）
+    function norm(s) {
+      return String(s || '')
+        .replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '')
+        .replace(/[^0-9A-Za-z一-鿿ぁ-ヿ가-힣]/g, '');
+    }
+    function find(nm) {
+      var i;
+      nm = String(nm || '').trim();
+      for (i = 0; i < members.length; i++) if (members[i].name === nm) return members[i];
+      var k = norm(nm);
+      if (!k) return null;
+      for (i = 0; i < members.length; i++) if (norm(members[i].name) === k) return members[i];
+      return null;
+    }
+    var raw = [], cur = null;
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      var head = null, rest = '', unknown = false, m;
+      if ((m = line.match(/^\s*【\s*([^】\n]{1,16}?)\s*】\s*[:：]?\s*(.*)$/))) {
+        // 全角【】是我们要求的格式：里面写了谁就算谁，认不出来就是名单外的人 → 整段丢
+        head = m[1]; rest = m[2]; unknown = !find(head);
+      } else if ((m = line.match(/^\s*\[\s*([^\]\n]{1,16}?)\s*\]\s*[:：]?\s*(.*)$/)) && find(m[1])) {
+        head = m[1]; rest = m[2];
+      } else if ((m = line.match(/^\s*\*\*\s*([^*\n]{1,16}?)\s*\*\*\s*[:：]?\s*(.*)$/)) && find(m[1])) {
+        head = m[1]; rest = m[2];
+      } else if ((m = line.match(/^\s*([^\s:：【\[*\n][^:：\n]{0,15}?)\s*[:：]\s*(.*)$/)) && find(m[1])) {
+        head = m[1]; rest = m[2];
+      }
+      if (head !== null) {
+        if (unknown) {
+          try { console.warn('[小狸Live] 群聊里冒出名单外的名字「' + head + '」，这一段丢了'); } catch (e) {}
+          cur = { p: null, lines: [] }; raw.push(cur);   // p=null：这一段连同后面跟着的行一起丢
+          return;
+        }
+        cur = { p: find(head), lines: [] }; raw.push(cur);
+        if (rest) cur.lines.push(rest);
+        return;
+      }
+      if (!cur) { cur = { p: members[0], lines: [] }; raw.push(cur); }
+      cur.lines.push(line);
+    });
+    var out = [];
+    raw.forEach(function (s) {
+      var t = s.lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (!s.p || !t) return;
+      var last = out[out.length - 1];
+      if (last && last.p === s.p) { last.text += '\n\n' + t; return; }   // 同一个人连着两段 → 一条
+      out.push({ p: s.p, text: t });
+    });
+    return out;
+  }
+  // 群聊：一次调用，模型同时演所有人，按段首【名字】分段；脚本定开口顺序（随机），拆段后按人格分别入记录
+  // 0.1.34（玩家报「模型把角色搞混、串声线、一段里混几个人」）：
+  //   ① 每个成员一条独立 system（不再把所有 voice 塞一个大块），每条末尾点名「旁边还有谁」，明说不替别人开口；
+  //   ② 总规则 system 把输出格式写死（段首【名字】单独一行、一段只有一个人、名单外的名字一个不许出现）；
+  //   ③ 开口顺序行带 emoji 和 tag，让模型一眼记住谁是谁。
   async function groupSpeak(ctx, userLine, trigger) {
     var members = groupMembers().slice();
     for (var k = members.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var tmp = members[k]; members[k] = members[j]; members[j] = tmp; }
     var floor = -1;
     try { floor = typeof getLastMessageId === 'function' ? getLastMessageId() : -1; } catch (e) {}
     try {
+      var N = members.length;
       var names = members.map(function (x) { return x.name; });
-      var voices = members.map(function (x) { return '——【' + x.name + '】——\n' + x.voice; }).join('\n\n');
+      // 开口顺序：带 emoji 和 tag，「嗑学家🫧（嗑CP的）→ 反派智囊🐍（站反派那边的）」
+      var order = members.map(function (x) { var t = shortTag(x); return x.name + x.emoji + (t ? '（' + t + '）' : ''); }).join(' → ');
+      // 每人一条独立 system：谁、怎么说话、旁边还有谁、不许替谁开口
+      var memberPrompts = members.map(function (x, i) {
+        var others = members.filter(function (y) { return y.id !== x.id; }).map(function (y) {
+          var t = shortTag(y); return y.name + (t ? ' · ' + t : '');
+        }).join('、');
+        return { role: 'system', content: '【成员 ' + (i + 1) + '/' + N + '：' + x.name + ' ' + x.emoji + '】\n' + x.voice +
+          '\n（旁边还有：' + others + '。你只说你自己的话，不替他们开口，不学他们的口头禅和句式。）' };
+      });
       var fmt = [
-        '【群聊规则】上面这 ' + members.length + ' 个人此刻一起坐在<user>旁边看戏，你一个人演全部。输出格式：每人一段，段首写【名字】（用上面给的名字，一字不差），一段就是这个人这回合说的话，一到两句。',
-        '这一轮开口顺序：' + names.join(' → ') + '。后说的必须接前面的人说的（同意、反驳、补刀、岔开都行），不许各说各的。全员说完可以再加最多两段回嘴，总共不超过 ' + (members.length + 2) + ' 段。',
-        '每个人只用自己的声线，别串：嗑的只管嗑，使坏的只管使坏，外行的只问外行的问题。💡 建议行跟在说它的那个人的段落里。段与段之间空一行，段内不要再用【】。'
+        '【这一桌怎么演】上面这 ' + N + ' 个人此刻一起坐在<user>旁边看戏，你一个人把他们全演了。下面是硬格式，一条都不许省：',
+        '1. 每一段的第一行只写【名字】，单独占一行，名字后面不加冒号、不加 emoji、不加任何别的字。名字只能从这 ' + N + ' 个里选，原样抄：' + names.join('、') + '。段与段之间空一行。',
+        '2. 一段里只有一个人说话。这个人说完了、你想换人，就另起一段、重写一行【名字】——绝不允许一段里出现两个人的话。',
+        '3. 这 ' + N + ' 个名字以外的名字一个都不许出现：不许自己加旁白、系统、主持人、AI、小狸之类的段，也不许替卡里的角色说话。',
+        '4. 这一轮的开口顺序：' + order + '。照这个顺序来，每个人至少一段；全员说完可以再加最多两段回嘴，总段数不超过 ' + (N + 2) + ' 段。后说的必须接前面的人刚说的（同意、反驳、补刀、岔开都行），不许各说各的。',
+        '5. 每个人说的内容必须跟他自己那条【成员】里的声线一条条对上——说错人比说不好更糟。宁可这一段短、平、没包袱，也绝不许把 A 的口头禅、A 的立场、A 的句式安到 B 头上。你觉得某句话更好笑，也得看它该由谁说。',
+        '6. 💡 建议行跟在说它的那个人的段落里；段内正文不要再出现【】。'
       ].join('\n');
       var log = readLog();
+      // hist 回灌：每个人（包括"自己"上一轮说的）都带【名字】前缀，跟要求它输出的格式一模一样
       var hist = log.filter(function (m) { return m.who === 'me' || m.who === 'them'; }).slice(-12).map(function (m) {
         return { role: m.who === 'me' ? 'user' : 'assistant', content: m.who === 'me' ? m.text : '【' + (m.pname || '?') + '】' + m.text };
       });
-      var prompts = [
-        { role: 'system', content: '【你要演的人】\n' + voices },
-        { role: 'system', content: contextBlock(ctx) },
-        { role: 'system', content: RULES },
-        { role: 'system', content: fmt }
-      ].concat(hist);
+      // 0.1.33：正文块挪到对话记录之后（离提问最近的位置），否则模型把紧贴问题的 user/assistant 来回当成了剧情
+      var prompts = memberPrompts
+        .concat([{ role: 'system', content: RULES }, { role: 'system', content: fmt }])
+        .concat(hist).concat([{ role: 'system', content: contextBlock(ctx) }]);
       var uin = userLine
         ? userLine
         : (trigger === 'poke'
-            ? '（<user>戳了你们一下：都说两句。）'
-            : '（正文刚出来一回合。看一眼最新那层，按顺序每人说两句，后面的接前面的。）');
+            ? '（<user>戳了你们一下：都说两句。每段第一行是【名字】。）'
+            : '（正文刚出来一回合。看一眼最新那层，按顺序每人说两句，后面的接前面的。每段第一行是【名字】。）');
       var A = activeApi();
       var reply;
       if (A.cfg) reply = await callIndependent(A.cfg, prompts.concat([{ role: 'user', content: uin }]));
       else reply = await generateRaw({ user_input: uin, ordered_prompts: prompts.concat(['user_input']), should_silence: true, should_stream: false, max_chat_history: 0, generation_id: NS + '_' + Date.now() });
       var text = cleanReply((typeof reply === 'string' ? reply : (reply && reply.content) || '').trim());
       if (!text) throw new Error('空回复');
-      // 拆段：【名字】开头；认不出名字的段落归给上一个说话的人
-      var segs = [], cur = null;
-      text.split(/\r?\n/).forEach(function (line) {
-        var m = line.match(/^\s*[【\[]([^】\]]{1,14})[】\]]\s*[:：]?\s*(.*)$/);
-        if (m) {
-          var who = null; var nm = m[1].trim();
-          for (var i = 0; i < members.length; i++) if (members[i].name === nm || nm.indexOf(members[i].name) >= 0 || members[i].name.indexOf(nm) >= 0) { who = members[i]; break; }
-          if (who) { cur = { p: who, lines: [] }; segs.push(cur); if (m[2]) cur.lines.push(m[2]); return; }
-        }
-        if (!cur) { cur = { p: members[0], lines: [] }; segs.push(cur); }
-        cur.lines.push(line);
-      });
-      segs = segs.map(function (s) { return { p: s.p, text: s.lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() }; }).filter(function (s) { return s.text; }).slice(0, members.length + 2);
+      var segs = splitGroupSegments(text, members).slice(0, N + 2);
       if (!segs.length) throw new Error('没拆出任何人的话');
       for (var si = 0; si < segs.length; si++) {
-        if (si > 0) await sleep(Math.min(2200, 600 + segs[si].text.length * 45));
+        // 0.1.34：人多时段间停顿按人数压短（3 人 2.2s 封顶 → 6 人约 1.1s），一桌别等太久
+        if (si > 0) { var gk = Math.min(1, 3 / Math.max(3, segs.length)); await sleep(Math.min(2200 * gk, (600 + segs[si].text.length * 45) * gk)); }
         pushLog({ who: 'them', pname: segs[si].p.name, text: segs[si].text, floor: floor >= 0 ? floor : null, trigger: trigger, ts: Date.now() });
         renderBody(); scrollBottom();
-        if (!isOpen()) { setUnread(unread + 1); showBubble(dispName(segs[si].p), segs[si].text); }
+        if (!isOpen()) { setUnread(unread + 1); showBubble(segs[si].p.emoji + ' ' + dispName(segs[si].p), segs[si].text); }
       }
     } catch (e) {
       var msg = (e && e.message) || String(e);
@@ -1502,11 +1633,11 @@
       });
       var prompts = [
         { role: 'system', content: '【你是谁】\n' + p.voice },
-        { role: 'system', content: contextBlock(ctx) },
         { role: 'system', content: RULES }
       ];
       if (g) prompts.push({ role: 'system', content: groupRule(p, g) });
-      prompts = prompts.concat(hist);
+      // 0.1.33：正文块放在对话记录之后、提问之前——最贴近问题的那段才是它默认当"现在"的东西
+      prompts = prompts.concat(hist).concat([{ role: 'system', content: contextBlock(ctx) }]);
       var uin = userLine
         ? userLine
         : (trigger === 'poke'
