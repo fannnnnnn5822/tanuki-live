@@ -5,6 +5,7 @@
  * 作者: fannnnnnn × Claude
  * 版本: 0.1.0 (2026-08-16) 初版，等红笔
  *       0.1.31 (2026-09-14) 跑团DM 人格（提示词作者 Crazy Hat）+ 🎲 检定行本地掷 d20 + 读几层正文可调、最新一层保末尾
+ *       0.1.32 (2026-09-14) Fan：别做 token 限制——正文整层、角色描述、persona、变量全部不截断（要省就少读几层）
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -23,7 +24,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.31';
+  var VERSION = '0.1.32';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -1292,7 +1293,6 @@
   function safeJson(obj, max) {
     try {
       var s = JSON.stringify(obj, function (k, v) {
-        if (typeof v === 'string' && v.length > 300) return v.slice(0, 120) + '…(' + v.length + '字)';
         if (typeof v === 'string' && /^data:image/i.test(v)) return '[图片]';
         return v;
       });
@@ -1305,10 +1305,10 @@
     try {
       if (typeof getCharacter === 'function') {
         var ch = await getCharacter('current');
-        if (ch) { ctx.charName = ctx.charName || ch.name || ''; ctx.charDesc = stripJunk(ch.description || '').slice(0, 1800); }
+        if (ch) { ctx.charName = ctx.charName || ch.name || ''; ctx.charDesc = stripJunk(ch.description || ''); }
       }
     } catch (e) {}
-    try { if (typeof getPersona === 'function') { var pe = getPersona('current'); if (pe) ctx.persona = ((pe.name || '') + '：' + stripJunk(pe.description || '')).slice(0, 600); } } catch (e) {}
+    try { if (typeof getPersona === 'function') { var pe = getPersona('current'); if (pe) ctx.persona = ((pe.name || '') + '：' + stripJunk(pe.description || '')); } } catch (e) {}
     try { if (typeof getLoadedPresetName === 'function') ctx.preset = getLoadedPresetName() || ''; } catch (e) {}
     try {
       var ST = VIEW.SillyTavern; var c = ST && ST.getContext ? ST.getContext() : null;
@@ -1328,20 +1328,17 @@
       if (last >= 0 && typeof getChatMessages === 'function') {
         var from = Math.max(0, last - nFloors + 1);
         var msgs = getChatMessages(from + '-' + last, { hide_state: 'unhidden' }) || [];
-        // 0.1.31：最新一层保留【末尾】2400 字（砍头不砍尾）——小狸看的是"现在"，长楼层砍尾巴等于砍掉当前这一刻；旧层照旧砍前 1400
-        ctx.recent = msgs.map(function (m, i) {
-          var t = stripJunk(m.message);
-          if (i === msgs.length - 1) t = t.length > 2400 ? '…（前略）' + t.slice(-2400) : t;
-          else t = t.slice(0, 1400);
-          return { id: m.message_id, who: m.role === 'user' ? '<user>' : (m.name || '正文'), text: t };
+        // 0.1.32（Fan：别做 token 限制）：正文整层原样给，不截断；要省就在设置里少读几层
+        ctx.recent = msgs.map(function (m) {
+          return { id: m.message_id, who: m.role === 'user' ? '<user>' : (m.name || '正文'), text: stripJunk(m.message) };
         });
       }
     } catch (e) {}
     try {
       var v = getVariables({ type: 'chat' }) || {};
       var vv = {}; for (var k in v) { if (k === LOG_KEY) continue; vv[k] = v[k]; }
-      if (vv.stat_data) ctx.vars = safeJson(vv.stat_data, 1600);
-      else ctx.vars = safeJson(vv, 1400);
+      if (vv.stat_data) ctx.vars = safeJson(vv.stat_data, 20000);
+      else ctx.vars = safeJson(vv, 20000);
     } catch (e) {}
     try {
       if (typeof getCharWorldbookNames === 'function') { var wn = getCharWorldbookNames('current'); if (wn) { if (wn.primary) ctx.wbNames.push(wn.primary); (wn.additional || []).forEach(function (n) { ctx.wbNames.push(n); }); } }
