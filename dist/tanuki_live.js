@@ -18,6 +18,10 @@
  *                           道具＝导演贝雷帽 + 手边一只导演喇叭
  *       0.1.36 (2026-09-15) Fan 截图：群聊一桌人的话全挤进一个气泡、落款只有第一个开口的人——模型把名字光秃秃单独写一行
  *                           （没【】没冒号），拆段器五种段头都不认。现在整行洗完正好是成员名也算段头
+ *       0.1.37 (2026-09-15) Fan 报「它没读最新一层，读到倒数第二层为止」（蒋默那局第 4 层实锤：正文还没写完它就开口，
+ *                           真写完那次又被当成重复跳过）：自动开口先看主线是不是还在生成、最新一层是不是空的，
+ *                           记账从「楼层号:swipe号」改成「楼层号+正文指纹」，重新生成出来的同号楼层照样开口；
+ *                           共用 API 时自己那次调用触发的世界书事件不再盖掉正文真触发的条目名单
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -36,7 +40,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.36';
+  var VERSION = '0.1.37';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -1466,7 +1470,7 @@
   /* ================================================================
      生成
      ================================================================ */
-  var busy = false, lastAutoKey = '', autoCounter = 0, pendingAuto = false;
+  var busy = false, lastAutoKey = '', autoCounter = 0, pendingAuto = false, selfGen = 0;
   var RULES = [
     '【你现在的处境】你坐在<user>旁边，看<user>玩这张卡。你在第四面墙外面：卡里的人听不见你，你也不是卡里的谁。你直接对<user>说话（叫<user>"你"）。',
     // 0.1.33：玩家报「问它现在什么剧情，它以为我们俩的聊天就是剧情」——contextBlock 里也写了一遍，这里是规则侧的同一条
@@ -1522,7 +1526,8 @@
       console.warn('[小狸Live] talk 失败', e);
     } finally {
       busy = false; setBusy(false);
-      if (pendingAuto) { pendingAuto = false; if (settings.auto) setTimeout(function () { if (!busy) talk('', 'auto'); }, 600); }
+      // 0.1.37：补说之前也看一眼主线——又在生成新一层了就不补（那层写完会自己触发，补的这句只会是旧的）
+      if (pendingAuto) { pendingAuto = false; if (settings.auto) setTimeout(function () { if (!busy && !mainGenerating()) talk('', 'auto'); }, 600); }
     }
   }
   // tag 只取「 · 」前面那半截当一句话标签（'纯 CP 粉 · 零建设性' → '纯 CP 粉'）；没 tag 就退到 watches
@@ -1639,7 +1644,7 @@
       var A = activeApi();
       var reply;
       if (A.cfg) reply = await callIndependent(A.cfg, prompts.concat([{ role: 'user', content: uin }]));
-      else reply = await generateRaw({ user_input: uin, ordered_prompts: prompts.concat(['user_input']), should_silence: true, should_stream: false, max_chat_history: 0, generation_id: NS + '_' + Date.now() });
+      else { selfGen++; try { reply = await generateRaw({ user_input: uin, ordered_prompts: prompts.concat(['user_input']), should_silence: true, should_stream: false, max_chat_history: 0, generation_id: NS + '_' + Date.now() }); } finally { selfGen--; } }
       var text = cleanReply((typeof reply === 'string' ? reply : (reply && reply.content) || '').trim());
       if (!text) throw new Error('空回复');
       var segs = splitGroupSegments(text, members).slice(0, N + 2);
@@ -1693,14 +1698,17 @@
         // 独立 API：直接 fetch，OpenAI 兼容。不经过酒馆管线 → Horae 之类的记忆插件塞不进指令
         reply = await callIndependent(A.cfg, prompts.concat([{ role: 'user', content: uin }]));
       } else {
-        reply = await generateRaw({
-          user_input: uin,
-          ordered_prompts: prompts.concat(['user_input']),
-          should_silence: true,
-          should_stream: false,
-          max_chat_history: 0,
-          generation_id: NS + '_' + Date.now()
-        });
+        selfGen++;
+        try {
+          reply = await generateRaw({
+            user_input: uin,
+            ordered_prompts: prompts.concat(['user_input']),
+            should_silence: true,
+            should_stream: false,
+            max_chat_history: 0,
+            generation_id: NS + '_' + Date.now()
+          });
+        } finally { selfGen--; }
       }
       var text = (typeof reply === 'string' ? reply : (reply && reply.content) || '').trim();
       text = cleanReply(text);
@@ -1838,31 +1846,63 @@
   /* ================================================================
      事件
      ================================================================ */
+  // 0.1.37（Fan 报「它没读最新一层，读到倒数第二层为止」——蒋默那局第 4 层实锤：01:06 它就对「第 4 层」开了口，
+  // 那层 01:09 才重新开始生成、01:10 写完，写完之后它一句没说）。病根两个：
+  //   ① GENERATION_ENDED ≠ 正文写完了。生成失败、被停、别的脚本解锁发送按钮，酒馆都发这个信号，
+  //      那一刻最后一层可能是半截或空的占位 → 它读到的实际只有上一层；
+  //   ② 旧 key 是「楼层号:swipe号」，重新生成出来的第 4 层还是「4:0」→ 真写完那次被当成重复跳过。
+  // 现在：主线还在生成就不动（真写完时还会再来一次信号）；最新一层洗完是空的不记账；key 带正文指纹。
+  function mainGenerating() {
+    try { if (DOC.body && DOC.body.dataset && DOC.body.dataset.generating) return true; } catch (e) {}
+    // 别的脚本解锁按钮时 data-generating 会被提前删掉，所以再看一眼酒馆的流式处理器是不是还在跑
+    try {
+      var c = VIEW.SillyTavern && VIEW.SillyTavern.getContext ? VIEW.SillyTavern.getContext() : null;
+      var sp = c && c.streamingProcessor;
+      if (sp && !sp.isFinished && !sp.isStopped) return true;
+    } catch (e) {}
+    return false;
+  }
+  // 楼层号 + 正文长度 + djb2 指纹。洗完只剩空白/省略号（流式占位、空回）→ null，不记账
+  function autoKeyOf(id, text) {
+    var s = stripJunk(text);
+    if (!s.replace(/[\s.。…·]+/g, '')) return null;
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return id + ':' + s.length + ':' + (h >>> 0).toString(36);
+  }
+  function checkAuto() {
+    if (!settings.auto) return;
+    if (mainGenerating()) { console.log('[小狸Live] 主线还在生成，等它真写完再说'); return; }
+    var key = null;
+    try {
+      var lastId = getLastMessageId();
+      var lm = (getChatMessages(lastId) || [])[0];
+      if (!lm || lm.role === 'user') return;
+      key = autoKeyOf(lastId, lm.message);
+    } catch (e) { return; }
+    if (!key) { console.log('[小狸Live] 最新一层是空的，先不开口'); return; }
+    if (key === lastAutoKey) return;
+    lastAutoKey = key;
+    autoCounter++;
+    if (autoCounter % Math.max(1, settings.everyN) !== 0) { console.log('[小狸Live] 这层跳过（每 ' + settings.everyN + ' 层说一次）'); return; }
+    // 0.1.12：它还在说上一句时新正文就出来了 → 以前直接丢掉这轮（Fan："不会每轮稳定出"），现在记一笔，说完立刻补
+    if (busy) { pendingAuto = true; console.log('[小狸Live] 它还在说上一句，这层排队，说完补'); return; }
+    talk('', 'auto');
+  }
+
   var H = {};
   function bindEvents() {
     try {
-      H.wi = function (entries) { try { activatedEntries = Array.isArray(entries) ? entries.slice(0, 40) : []; } catch (e) {} };
+      // 0.1.37：共用 API 时小狸自己的 generateRaw 也会跑一遍世界书扫描、发这个事件（扫的是空聊天+小狸的提问，只剩常驻条目），
+      // 会把正文真触发的名单盖掉。自己在生成时来的一律不收
+      H.wi = function (entries) { if (selfGen > 0) return; try { activatedEntries = Array.isArray(entries) ? entries.slice(0, 40) : []; } catch (e) {} };
       eventOn(tavern_events.WORLD_INFO_ACTIVATED, H.wi);
     } catch (e) {}
     try {
+      // 信号来了先等 900ms 再判断（MVU 之类在 MESSAGE_RECEIVED 里改正文，给它们留时间），判断全在 checkAuto
       H.gen = function () {
         if (!settings.auto) return;
-        // 只在正文楼层真的变了才说（防 swipe/自己的 generateRaw 触发）
-        var lastId = -1, key = '';
-        try {
-          lastId = getLastMessageId();
-          var ms = getChatMessages(lastId, { include_swipes: true }) || [];
-          var lm = ms[0];
-          if (!lm || lm.role === 'user') return;
-          key = lastId + ':' + (typeof lm.swipe_id === 'number' ? lm.swipe_id : 0);
-        } catch (e) { return; }
-        if (key === lastAutoKey) return;
-        lastAutoKey = key;
-        autoCounter++;
-        if (autoCounter % Math.max(1, settings.everyN) !== 0) { console.log('[小狸Live] 这层跳过（每 ' + settings.everyN + ' 层说一次）'); return; }
-        // 0.1.12：它还在说上一句时新正文就出来了 → 以前直接丢掉这轮（Fan："不会每轮稳定出"），现在记一笔，说完立刻补
-        if (busy) { pendingAuto = true; console.log('[小狸Live] 它还在说上一句，这层排队，说完补'); return; }
-        setTimeout(function () { if (!busy) talk('', 'auto'); else pendingAuto = true; }, 900);
+        setTimeout(checkAuto, 900);
       };
       eventOn(tavern_events.GENERATION_ENDED, H.gen);
     } catch (e) {}
