@@ -22,6 +22,7 @@
  *                           真写完那次又被当成重复跳过）：自动开口先看主线是不是还在生成、最新一层是不是空的，
  *                           记账从「楼层号:swipe号」改成「楼层号+正文指纹」，重新生成出来的同号楼层照样开口；
  *                           共用 API 时自己那次调用触发的世界书事件不再盖掉正文真触发的条目名单
+ *       0.1.38 (2026-09-15) Fan 点的：群聊上限 6 → 9
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -40,7 +41,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.37';
+  var VERSION = '0.1.38';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -379,7 +380,7 @@
      设置 & 存储
      ================================================================ */
   var settings = { persona: 'shipper', auto: true, everyN: 1, ctxFloors: 6, bubble: true, adoptMode: 'inject', snap: true, presence: false, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null };
-  var GROUP_MAX = 6;   // 0.1.34：玩家说 3 个不够坐（上限只在这里写一次，别再往别处抄数字）
+  var GROUP_MAX = 9;   // 0.1.34：玩家说 3 个不够坐 → 6；0.1.38 Fan 点的 → 9（上限只在这里写一次，别再往别处抄数字）
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
   var API_KEY_LS = NS + '-api';
