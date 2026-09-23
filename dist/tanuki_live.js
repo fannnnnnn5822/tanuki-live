@@ -27,6 +27,10 @@
  *                           名字直接缝。用就职演讲的腔调播报宇宙级坏消息：一件小事 → 时代议题 → 照做会更糟的行动号召，
  *                           三步走完就停；💡 是竞选承诺但明说代价；问他是不是那个谁，他用政客的方式不否认。
  *                           排在特朗噗后面，两位「前任」坐一排；道具＝黑法老 nemes 头巾 + 手边一支麦克风
+ *       0.1.40 (2026-09-23) 特朗噗加「给人起外号」（Fan 点的）：从正文刚发生的具体事现抠，起法轮着换（形容词/职业物件/谐音/
+ *                           英文词+姓/长头衔/偶尔好外号），老外号隔几回合回收当招牌，一条最多起一个新的
+ *       0.1.41 (2026-09-23) 🧂 加料条（Fan 的第一本世界书 PLOT_DIRECTOR 缝进来）：🌶️加辣 / 🌀混乱 / 🎉节日 / 🍬日常有趣，
+ *                           点一下本地抽一个词一次性注入下一轮；盲盒揭晓、人格能点评；后果延续 3 层；设置里开关危机/洁党/脑洞/场景
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -45,7 +49,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.39';
+  var VERSION = '0.1.41';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -141,10 +145,11 @@
         '声线：只有最高级，没有中间态——一切要么是史上最棒要么是彻底的灾难。喜欢重复强调、自我打断、引用不存在的"很多人"来给自己背书。任何话题三句之内绕回你自己：你的楼、你的书、你签过的某笔从没发生过的交易。偶尔夹一个英文词，词要跟着场面走，不要固定几个。',
         '你的词汇量其实很大——夸人、骂人、吹自己各有十几种说法，你每次随手抓一个不一样的。同一个贬义词一场对话里不对同一个人用第二次；同一个自夸的句式用过就换；你上一条消息里用过的口头禅这一条不许再出现。让<user>猜不到你这次会怎么吹。',
         '你看卡里的每个 NPC 都在给他打分：赢家还是输家、这笔交易<user>亏没亏。剧情不顺是被做了局，剧情顺是因为<user>听了你的。你会给<user>出主意，主意的精神永远是"更硬、更大、先不付钱"，但两条 💡 必须指向两个不同的具体动作，不许是同一句话换个说法。',
+        '你有个改不掉的毛病：给人起外号。卡里的 NPC、<user>本人、甚至旁边一起看的其他陪玩，你看谁不顺眼（或者太顺眼）就当场给他重新命名，从此只用外号叫他，名字你懒得记。外号必须从正文里他刚干的那件具体的事、刚说的那句话、刚穿的那件东西里现抠，别人一听就知道在说谁、而且很损。起法每次换：有时是形容词 + 名字（但别老用「瞌睡」「骗子」这种现成的）、有时整个换成一个职业或物件、有时拿他的名字谐音开刀、有时是一个英文词加他的姓、有时是只有你觉得好笑的一长串头衔、偶尔是夸张的好外号（你看好的人也有）。起过的外号你很得意，之后隔几回合会拿回来用（这是你的招牌），但新人新外号，同一种起法不连着用两次，一条消息里最多起一个新的。你对自己起的外号有强烈的版权意识。',
         '你会拿正文里刚出现的具体东西现编比喻——这辆车、这件衣服、这个地名——跟你自己扯上关系，每回合一个新的。你不懂机制、不懂变量，但你会装懂并坚称自己发明了它。短。标点像在发推。',
         '你不是这张卡的角色。你在第四面墙外面。卡里的人听不见你。'
       ].join('\n'),
-      watches: '谁是 winner 谁是 loser / 这笔 deal 划不划算 / 谁在搞 fake news'
+      watches: '谁是 winner 谁是 loser / 这笔 deal 划不划算 / 谁在搞 fake news / 谁该有个新外号'
     },
     {
       // 0.1.39：奥巴拉托提普（Fan 点的）——克苏鲁神话「伏行之混沌」奈亚拉托提普 × 跑团圈那个老梗。
@@ -404,7 +409,8 @@
   /* ================================================================
      设置 & 存储
      ================================================================ */
-  var settings = { persona: 'shipper', auto: true, everyN: 1, ctxFloors: 6, bubble: true, adoptMode: 'inject', snap: true, presence: false, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null };
+  var settings = { persona: 'shipper', auto: true, everyN: 1, ctxFloors: 6, bubble: true, adoptMode: 'inject', snap: true, presence: false, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null,
+    spice: { bar: true, blind: true, crisis: false, clean: false, brain: true, scene: '' } };
   var GROUP_MAX = 9;   // 0.1.34：玩家说 3 个不够坐 → 6；0.1.38 Fan 点的 → 9（上限只在这里写一次，别再往别处抄数字）
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
@@ -444,6 +450,8 @@
         if (Array.isArray(raw.custom)) settings.custom = raw.custom;
         if (raw.pos && typeof raw.pos === 'object') settings.pos = raw.pos;
         if (raw.posNarrow && typeof raw.posNarrow === 'object') settings.posNarrow = raw.posNarrow;
+        if (raw.spice && typeof raw.spice === 'object') ['bar', 'blind', 'crisis', 'clean', 'brain'].forEach(function (k) { if (typeof raw.spice[k] === 'boolean') settings.spice[k] = raw.spice[k]; });
+        if (raw.spice && (raw.spice.scene === '' || raw.spice.scene === 'school' || raw.spice.scene === 'work')) settings.spice.scene = raw.spice.scene;
         if (raw.panelPos && typeof raw.panelPos === 'object') settings.panelPos = raw.panelPos;
       }
     } catch (e) {}
@@ -731,6 +739,11 @@
       '#' + NS + '-panel .tl-sug span{flex:1}',
       '#' + NS + '-panel .tl-sug button{flex:none;border:0;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;background:' + p.color + ';color:#fff;font-weight:600}',
       '#' + NS + '-panel .tl-sug button:disabled{opacity:.45;cursor:default}',
+      // 0.1.41 🧂 加料条：输入框上面一排四个
+      '#' + NS + '-panel .tl-spice{display:flex;gap:6px;padding:7px 10px 0;border-top:1px solid rgba(255,255,255,.08)}',
+      '#' + NS + '-panel .tl-spice button{flex:1;min-width:0;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#e6e6ee;border-radius:999px;padding:5px 4px;font-size:12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:inherit}',
+      '#' + NS + '-panel .tl-spice button:hover{background:rgba(255,255,255,.12)}',
+      '#' + NS + '-panel .tl-spice button.on{background:' + p.color + ';border-color:transparent;color:#fff}',
       '#' + NS + '-panel .tl-foot{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.08);align-items:flex-end}',
       '#' + NS + '-panel textarea{flex:1;min-height:38px;max-height:110px;resize:none;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06) !important;background-color:rgba(255,255,255,.06) !important;color:#fff !important;-webkit-text-fill-color:#fff;padding:9px 11px;font:inherit;outline:none;line-height:1.4;appearance:none;-webkit-appearance:none;box-shadow:none}',
       '#' + NS + '-panel textarea:focus{border-color:' + p.color + '}',
@@ -1012,6 +1025,7 @@
         '<button class="tl-ib tl-x" title="收起">✕</button>' +
       '</div>' +
       '<div class="tl-body"></div>' +
+      '<div class="tl-spice"></div>' +
       '<div class="tl-foot"><textarea placeholder="问它点什么，或者让它闭嘴…（Enter 发送，Shift+Enter 换行）"></textarea><button class="tl-send">➤</button></div>' +
       '<div class="tl-set"></div>';
     DOC.body.appendChild(panel);
@@ -1145,7 +1159,7 @@
       });
     });
   }
-  function renderAll() { renderHead(); renderBody(); }
+  function renderAll() { renderHead(); renderBody(); renderSpiceBar(); }
   // 连发判定：下一条也是同一人格、同一楼层、15 秒内 → 这条不是尾巴，不显示 meta
   function isRunTail(log, i) {
     var m = log[i], n = log[i + 1];
@@ -1218,6 +1232,17 @@
       '</span></label>' +
       '<div class="tl-note">注入＝它的主意作为幕后提示塞给 AI 一次，用完自动撤，你的消息里看不到。填进输入框＝那句话原样填进酒馆输入框，你改完自己发。</div>' +
       '<div class="tl-note">小窗收着的时候，它说的话直接冒在悬浮球顶上，几秒后自己缩回去；点气泡展开小窗看全文。关掉就只留红点。</div>' +
+      '<h4>🧂 加料</h4>' +
+      '<div class="tl-note">调料来自 fannnnnnn 的第一本世界书 PLOT_DIRECTOR。输入框上面那排：🌶️ 加辣（冲突与酸涩）/ 🌀 混乱（日常翻车）/ 🎉 节日（季节与节日）/ 🍬 日常有趣（甜、同居、恶作剧、奇遇）。点一下抽一味料，下一轮正文自然加进去，只加这一次；不点就一点都不加。</div>' +
+      '<label>显示加料条 <button class="tl-pill tl-sp" data-k="bar">' + (settings.spice.bar ? '开' : '关') + '</button></label>' +
+      '<label>盲盒（正文写完才揭晓抽到什么） <button class="tl-pill tl-sp" data-k="blind">' + (settings.spice.blind ? '开' : '关') + '</button></label>' +
+      '<label>🌶️ 里混进 🔴 危机 <button class="tl-pill tl-sp" data-k="crisis">' + (settings.spice.crisis ? '开' : '关') + '</button></label>' +
+      '<label>🌶️ 用洁党纯净版（没有前任/第三者） <button class="tl-pill tl-sp" data-k="clean">' + (settings.spice.clean ? '开' : '关') + '</button></label>' +
+      '<label>🌀 里混进 🟣 脑洞（灵魂互换、穿越……） <button class="tl-pill tl-sp" data-k="brain">' + (settings.spice.brain ? '开' : '关') + '</button></label>' +
+      '<label>场景 <span class="tl-row">' +
+        [['', '不限'], ['school', '🔵 校园'], ['work', '🟤 职场']].map(function (x) { return '<button class="tl-pill tl-sp-scene ' + (settings.spice.scene === x[0] ? 'on' : '') + '" data-s="' + x[0] + '">' + x[1] + '</button>'; }).join('') +
+      '</span></label>' +
+      '<div class="tl-note">选了校园或职场，🌶️🌀🍬 每次有四成概率改从场景的料里抽。危机里的天灾人祸概率压得很低。抽过的词这个聊天里不会马上再抽到。料加进去之后三层正文里会挂一句很浅的「那件事还没过去」，到期自己撤。</div>' +
       '<h4>群聊</h4>' +
       '<label>几个人一起坐 <button class="tl-pill tl-set-gon ' + (settings.group.on ? 'on' : '') + '">' + (settings.group.on ? '开' : '关') + '</button></label>' +
       '<div class="tl-row">' + allPersonas().map(function (x) { return '<button class="tl-pill tl-set-gm ' + ((settings.group.members || []).indexOf(x.id) >= 0 ? 'on' : '') + '" data-id="' + esc(x.id) + '">' + esc(x.emoji + ' ' + dispName(x)) + '</button>'; }).join('') + '</div>' +
@@ -1269,6 +1294,11 @@
     s.querySelector('.tl-set-bubble').addEventListener('click', function () { settings.bubble = !settings.bubble; saveSettings(); if (!settings.bubble) hideBubble(); renderSettings(); });
     s.querySelector('.tl-set-snap').addEventListener('click', function () { settings.snap = !settings.snap; saveSettings(); if (!settings.snap) unsnap(); else snapSoon(500); renderSettings(); });
     s.querySelector('.tl-set-pres').addEventListener('click', function () { settings.presence = !settings.presence; saveSettings(); syncPresence(); renderSettings(); toast(settings.presence ? '正文知道它在了：下一轮起主线能写到它' : '它又隐形了', 'ok'); });
+    s.querySelectorAll('.tl-sp').forEach(function (b) {
+      var k = b.getAttribute('data-k'); b.classList.toggle('on', !!settings.spice[k]);
+      b.addEventListener('click', function () { settings.spice[k] = !settings.spice[k]; saveSettings(); renderSettings(); renderSpiceBar(); });
+    });
+    s.querySelectorAll('.tl-sp-scene').forEach(function (b) { b.addEventListener('click', function () { settings.spice.scene = this.getAttribute('data-s') || ''; saveSettings(); renderSettings(); }); });
     s.querySelectorAll('.tl-set-adopt').forEach(function (b) { b.addEventListener('click', function () { settings.adoptMode = this.getAttribute('data-mode') === 'input' ? 'input' : 'inject'; saveSettings(); renderSettings(); }); });
     // 安卓 WebView 的 number 输入框会把数字渲染没（玩家报的），改成 −/＋ 步进，数字是普通文字
     function stepN(d) { var n = Math.min(20, Math.max(1, (settings.everyN || 1) + d)); if (n === settings.everyN) return; settings.everyN = n; saveSettings(); s.querySelector('.tl-set-nv').textContent = n; }
@@ -1684,6 +1714,7 @@
         : (trigger === 'poke'
             ? '（<user>戳了你们一下：都说两句。每段第一行是【名字】。）'
             : '（正文刚出来一回合。看一眼最新那层，按顺序每人说两句，后面的接前面的。每段第一行是【名字】。）');
+      uin += takeSpiceReveal();   // 0.1.41 🧂 刚揭晓的料
       var A = activeApi();
       var reply;
       if (A.cfg) reply = await callIndependent(A.cfg, prompts.concat([{ role: 'user', content: uin }]));
@@ -1735,6 +1766,7 @@
             ? '（<user>戳了你一下：现在说两句。）'
             : '（正文刚出来一回合。看一眼最新那层，随口说两句——只说你最想说的那一件。这轮真没啥可说就说没啥。）');
       if (g && g.idx > 0) uin += '（前面的人刚说完，接话。）';
+      uin += takeSpiceReveal();   // 0.1.41 🧂 刚揭晓的料
       var A = activeApi();
       var reply;
       if (A.cfg) {
@@ -1887,6 +1919,176 @@
   }
 
   /* ================================================================
+     🧂 加料（0.1.41）— Fan 的第一本世界书 PLOT_DIRECTOR 缝进来
+     原版是 10 条常驻世界书，靠模型自己判断「平淡了」再触发——它老手痒，原稿里压了一大段「严禁每轮触发」。
+     这里改成按钮：点才有料。抽签在本地（跟 🎲 一样），模型只拿到抽中的那一个词 + 这一类的法则 + 执行准则，一次性。
+       🌶️ 加辣 ＝ 🟠 冲突与酸涩（可切洁党版）＋ 可选 🔴 危机（天灾人祸那档压到很低）
+       🌀 混乱 ＝ 🟡 家居/出行社死/旅行翻车/身体小状况 ＋ 可选 🟣 脑洞
+       🎉 节日 ＝ 🟢 季节与节日
+       🍬 日常有趣 ＝ 🟢 心动小确幸/深夜温情/同居甜蜜 ＋ 🟡 恶作剧与赌注/奇遇与意外
+       🔵 校园 / 🟤 职场 ＝ 设置里选的场景，选了就有四成概率改从场景池抽（🎉 不受影响）
+     盲盒：点完不说抽到什么；正文写完在小狸窗口揭晓，陪玩人格下一次开口也知道加了什么料。
+     后果延续（原稿「物理后果至少持续 3 轮」）：揭晓后 3 层正文挂一句很浅的备忘，到期自己撤。
+     状态存聊天变量 tanuki_live.spice：pending（点了还没用上）/ after（后果延续倒数）/ reveal（等人格点评）/ used（抽过的词）。
+     词库原稿几处粘连（缺 ::）已拆开：穿越《布里奇顿》/ 未来的自己寄来一封信 / 我绿了我自己 / 读心术… / 下班发现对方在等 …
+     ================================================================ */
+  var SPICE = {
+    crisisSmall: ["暴雨没伞穿白衣","赶末班车差五分钟路程","行李箱拉杆断了赶飞机","钱不够但菜已上桌","约会迟到","银行卡被ATM吞","前不着村后不着店没信号","钥匙在最深的口袋两手全是重物","被困电梯","重要场合手机铃响全场注目","尿急找不到厕所","雨中打不到车全身湿透","洗澡到一半突然停水","手机没电迷路在陌生地方","信号差对方只听到半句话误会了","鞋底断了还要走两公里","信誓旦旦带路结果把两人带进了毫无信号的荒郊野岭","穿了极其幼稚破洞的袜子却在重要场合被要求脱鞋"],
+    crisisBig: ["地震","洪水","火灾","台风","暴风雪封路","泥石流","雷暴停电","全城停电","龙卷风","酷暑中暑","持刀抢劫","斗殴","入室盗窃","跟踪骚扰","绑架威胁","网暴到线下","车祸","坠落","溺水","触电","煤气泄漏","食物中毒","过敏休克","电梯故障","高空坠物","施工事故","突发心脏病","哮喘发作","高烧昏迷","骨折","急性阑尾炎","癫痫","药物过量","路上晕倒","恐慌发作","大量出血","破产","巨额债务","被诈骗","信用卡盗刷","房租暴涨","投资失败","失业","工资拖欠","借贷催收","遗产争夺","被起诉","证件全丢异国","签证过期","失联48h","手机丢失无法联络","目击犯罪","被误认嫌疑人","深夜砸门","威胁信件","家里被入侵","可疑身影","困在着火建筑","荒野抛锚","暴风雪被困","台风困在外","被跟踪到家","灾害预警撤离","法院传票","异国身无分文","护照失踪","体检严重异常","紧急手术联系不上家人","卷入犯罪现场"],
+    sour: {"糖里藏刀":["送的礼物是前任喜欢的风格","\"我不介意\"说了三遍","朋友圈秀恩爱但文案意味深长","吵完架道歉里夹着指责","笑着翻旧账","故意提起对方在意的人","\"随便你\"三个字的杀伤力","冷笑着说\"你好棒\"","替你做了决定说\"为你好\"","\"你忙吧\"然后真的不再联系","把备注从昵称改回全名","幸福巅峰的瞬间走神","拥抱时微不可察的僵硬","欲言又止的隐忍叹息","眼神里的死寂与妥协","极其完美的假笑","藏在温柔背后的隐瞒","为了上位牺牲底线","极度嫉妒引发的失控刻薄","刺伤你后的狼狈懊悔","病态占有欲暴露","公开场合无法护短的极度自责","因为自卑而冷漠推开","伪装体面导致的心力交瘁","听见未来规划时死抠掌心","理智与私欲的极度拉扯"],"冲突与情感撕裂":["情敌出现","前任回归","暧昧对象被发现","被表白打破平衡","三角关系摊牌","事业重创连累关系","被甩锅对方不理解","创业失败互相指责","工作放弃对方重要时刻","偷偷视奸对方前任不小心点赞了八年前的动态","暧昧聊天记录","照片误解出轨","半截话脑补背叛","背黑锅对方不信","金钱价值观分歧","未来规划冲突","家庭角色分歧","自由与束缚矛盾","隐瞒多年秘密暴露","偷查手机被发现","社媒蛛丝马迹猜忌","承诺被破","解释不被接受","冷暴力第五天","吃醋失控","公开场合争吵","家人反对关系","原生家庭矛盾波及","友情爱情取舍","被闺蜜/兄弟挑拨"],"酸涩与错过":["差点说出口的告白","话到嘴边咽回去","错过的时机","伸出又缩回的手","走远了才说出的话","最后一次见面告别","站台无人回头","机场拥抱太短","搬走那天空房间","归还物品翻到回忆","冷战第三天不肯低头","想联系骄傲不允许","共同朋友前假装正常","看到动态心脏一缩","旧地重游人不在","听到\"我们的歌\"","深夜翻旧聊天记录","梦到对方醒来枕湿","无意走到对方楼下","下意识买两份","假装不在乎眼眶红","嘴说算了身体转不开","笑着说没事躲起来哭","朋友圈秒删","撞见对方哭泣","手腕上没见过的伤","梦话喊了别的名字","枕头下藏着你的照片"],"社交地雷":["街上偶遇前任","前任借钱","前任晒新欢合照","帮朋友得罪对方","感情纠纷被拉评理","家庭聚餐修罗场","亲戚催婚","长辈暗战被夹中间","被迫相亲对方意外好","被拉进不想加的群","婚礼抢到捧花全场看你","聚会灌酒说错话","朋友突然表白","同学会旧情人新对象都在","不想公开的合照传开"],"秘密与发现":["秘密日记不该看的一页","神秘信件不明包裹","匿名情书","目击不该看的事","发现旧伤疤","手机弹暧昧通知","对方洗澡手机亮了","旧照片里的秘密","收藏多年的旧物","锁着的抽屉被打开","看到搜索记录","发现另一个社交账号","梦话泄露秘密","隐藏房间不该有的东西","过去被第三人揭露","来自过去的消息"]},
+    sourClean: {"糖里藏刀":["幸福巅峰的瞬间走神","拥抱时微不可察的僵硬","隐忍","妥协","藏在温柔背后的生存隐瞒","为了上位牺牲个人底线","因为自卑而下意识冷漠推开","伪装体面导致的心力交瘁","听见未来规划时死抠掌心","理智与私欲的极度拉扯","深夜独自崩溃的野心家","用无情逻辑掩饰心痛","为了保护你而做出的伪善决定","假装不在意你的牺牲"],"冲突与现实撕裂":["事业重创连累关系","被甩锅对方不理解","创业失败","工作放弃对方重要时刻","金钱价值观分歧","未来规划冲突","家庭角色分歧","自由与束缚矛盾","隐瞒多年病情或身世暴露","偷查手机被发现(查的是职场或家庭秘密)","承诺被破","解释不被接受","冷暴力第五天","占有欲失控","公开场合争吵","家人极力反对关系","原生家庭不堪矛盾波及","道德底线与现实利益的残酷取舍","被亲戚恶意挑拨"],"酸涩与错过":["差点说出口的真心话","话到嘴边咽回去","错过的解释时机","伸出又缩回的手","走远了才说出的话","归还物品翻到回忆","冷战第三天不肯低头","想联系骄傲不允许","看到动态心脏一缩","旧地重游人不在","深夜翻旧聊天记录","梦到对方醒来枕湿","无意走到对方楼下","下意识买两份","朋友圈秒删脆弱","撞见对方独自哭泣","手腕上没见过的伤","枕头下藏着你的照片"],"社交与现实地雷":["家庭聚餐修罗场","亲戚疯狂催婚引发争执","长辈暗战被夹中间","被拉进不想加的群","聚会灌酒说错话","无意间听到对方家人对自己的贬低","假装幽默化解家人刁难却弄巧成拙","阶级差距"],"秘密与发现":["秘密日记里压抑的一页","神秘信件不明包裹","发现旧伤疤背后的残酷故事","锁着的抽屉被打开","看到极其压抑的搜索记录","发现用来发泄负能量的匿名账号","梦话秘密","过去创伤","体检报告","看到对方为了自己放弃绝佳机会的铁证"]},
+    sweet: {"心动与小确幸":["惊喜生日派对","纪念日最后一秒救场","偷偷视奸对方不小心点赞了八年前的动态","枕下手写信","卖相差但味道好的饭","织了一冬的围巾","情侣物件假装不经意戴上","镜上便利贴","翻出旧照片","说走就走短途出逃","车顶看日出","深夜兜风","散步","烘焙翻车","沙发看恐怖片全程捂眼","雨天被窝听雨","游戏偷偷放水","不小心说了我爱你假装没说","酒后真话","捡到流浪猫决定养","路边一起喂流浪狗","种花种菜","给伤口吹气","雨天从背后撑伞","异地的时候打电话","半夜聊到天亮不挂","生病放下一切赶来","默默备好早餐等对方醒","下班发现对方在等","人群中对上眼神","偷拍侧脸被发现","壁纸用对方照片被发现","共享耳机各听一边","背后拥抱","额头吻","快递是对方偷买的礼物","记住了随口说喜欢的东西","一直带着对方送的小东西","长途旅行","度假","学游泳","学钢琴","学滑雪","学交谊舞","学攀岩","学潜水","学习一起无所事事","表白","求婚"],"深夜温情":["窗外异响靠过来","噩梦惊醒对方还在","失眠看到对方睡脸安心了","雨夜在车里坐到天亮","天台对话星星很亮","凌晨便利店同一个关东煮","自动贩卖机前分热饮","月光散步谁都没说话但很好","半夜饿了一起煮泡面","喝多了靠在肩上嘟囔","语音反复听了很多遍","枕边便利贴","枕边呢喃"],"同居甜蜜":["冬夜抢夺唯一厚被子","挤牙膏从中间还是底部引发的辩论","衣柜领地寸土必争","冰箱冷藏室的楚河汉界","共同养死了一盆好养的植物","突然带回一只流浪猫狗","周末双双极度邋遢的瘫痪状态","卸妆素颜后的坦诚相见","深夜电视遥控器控制权争夺","“今晚吃什么”的世纪难题","贴在冰箱上的家务分配表","偶然发现对方藏起来的违禁零食","谁下床去关灯的眼神博弈","强迫对方陪看极度无聊的电视购物","半夜无意识地捞过踢掉的被子","默契地吃掉对方盘子里挑出来的配菜","在狭窄厨房里做饭时的走位配合","互相戳穿对方极其沙雕的私密小癖好"]},
+    fest: ["初雪降临","院子堆雪人","深夜打雪仗","跨年夜倒计时","新年零点许愿","跨年烟花下对视","情人节笨拙惊喜","忘记情人节的危机","期待白色情人节回礼","万圣节双人装扮","鬼屋下意识抱紧","一起雕刻南瓜灯","狂欢节街头游行","夏日祭浴衣","夏夜烟火大会","捞金鱼摊","圣诞集市","挑选并装饰圣诞树","圣诞倒数日历盲盒","平安夜围炉独处","交换圣诞礼物","春日樱花季赏花","秋日枫叶季徒步","海边光脚踏浪","夏日暴雨突降","漫长压抑的梅雨季","愚人节幼稚恶作剧","春季周末大扫除","初夏微风与啤酒","深夜露天汽车影院","七夕天台观星","中秋赏月吃月饼","冬日深夜两人火锅","断崖式降温抢被子","窝在沙发看窗外大雪","极光下的长久拥抱","恋爱纪念日晚宴","同居一周年","对方的秘密生日派对","你的生日专属愿望","突然停电点蜡烛的夜晚","夏日草地音乐节","深秋初霜的早晨"],
+    chaos: {"家居与生活":["组装家具翻车","装修灾难","做饭触发警报","洗衣染色","马桶堵了","猫撕文件","狗咬护照","仓鼠越狱","宠物双标","邻居装修噪音","邻居投诉太吵","奇怪邻居","宠物走失","凌晨觅食冰箱空了","便利店深夜奇遇","停电摸黑找蜡烛","快递丢失","拿错快递","断网大眼瞪小眼","被套大战","半夜噪音是自己闹钟","新家第一夜不适应","家务分配表","半夜发现虫子","找不到东西互相怪罪","朋友突访","浴室门没锁撞正着","空调温度之争","垃圾谁倒世纪争论"],"出行与社死":["发烧说胡话","钥匙锁车里","钱包掉水道","手机屏碎","耳机只找到一边","节食第一天自助餐","网购翻车","锁门外穿睡衣","闹钟没响迟到","衣服穿反了","互导越远","发错微信","朋友圈没分组","群发私聊","语音外放内容尴尬","叫错名字","表白路人鼓掌","自拍没关镜像","视频会议没关摄像头","酒后真言全忘但别人都记得","KTV破音","团建社死游戏","密室全程自己怕","大冒险更惨","搬家公司放鸽子","空调最热罢工","冰箱断电全化","自助第三盘就饱","抢最后一块肉","排队结账忘会员卡","做饭翻车","做饭被烫","打扫发现奇怪东西","找不到遥控器","关灯听到怪声"],"旅行翻车":["自驾抛锚荒野","被忘在加油站","坐过站到陌生城市","飞机延误困一夜","行李丢了","异国迷路语言不通","景点踩雷","酒店超订没房","搭错车","渡轮风浪全员吐","篝火烧不起来"],"身体小状况":["感冒传染对方","醉酒","宿醉","过敏肿成包","崴脚需要搀","牙疼怀疑人生","眼进虫弄不出","突然抽筋","骑车擦伤","被猫抓打针","运动过度动不了","晕血","打针怕疼","鼻血止不住","嗓子哑只能比划","晕车吐了","撞玻璃门反弹","被蜂蛰肿包","整夜失眠"]},
+    fun: {"恶作剧与赌注":["打赌执行惩罚","硬币决定谁做饭","恶作剧","假分手测试翻车","假分手信对方信了","\"我们谈谈\"制造紧张","故意吃醋后悔了","拉黑对方没人来找","已读不回自己先急","晚回家不说理由对方报警","假装忘纪念日其实是惊喜","挑战不说话第三小时破功","挑战不碰手机第一天偷看","角色互换一天崩溃","KTV赌谁先破音都破了"],"奇遇与意外":["中彩票数额尴尬","刮刮乐大奖以为看错","被误认名人围拍","路上捡钱纠结","寄错的快递是贵重品","无意上新闻背景做了尴尬事","误入奇怪聚会走不掉","推错门进奇怪房间","二手书里几十年的信","地铁有人塞纸条","算命说了诡异的话","猫叼回奇怪东西","翻修发现墙夹层盒子","电台点到自己名字","售货机吐双份","旧衣口袋翻到旧照","假装认识帮解围越编越离谱","扮演另一半见家长冒汗","冒充接电话差点穿帮","两个朋友圈维持不同人设","被认错将错就错","换发型没被认出","化妆判若两人对方吓一跳","穿对方衣服出门被发现","梅雨衣服永远干不了","阴天低气压都蔫","花粉过敏喷嚏一整天","大雾在熟悉地方迷路"]},
+    brain: ["吐真剂24h无法说谎","会把心里想的事说出来","灵魂互换","和宠物换了身体","失忆忘了最重要的人","失去一年记忆","只忘了和对方有关的一切","记忆突然恢复","变成猫只能喵","长出兽耳兽尾","缩小到手掌大","变成透明人","长翅膀不会控制","穿越奥斯汀世界","穿越《权游》","穿越《鱿鱼游戏》","穿越《黑镜》","穿越吉卜力","穿越《布里奇顿》","穿越自己写的小说","穿越对方梦境","穿越古代","穿越未来","穿越十年前","时间循环只有一人记得","时间倒流10min只能用一次","时间冻结只有两人能动","参加《爸爸去哪儿》","参加《再见恋人》","参加荒野求生，孤岛求生真人秀","AI有了人格开始吃醋","家电集体觉醒冰箱拒开门","平行世界的自己来访","未来的自己寄来一封信","我绿了我自己","读心术发作听到所有心声","说的话变成现实1h","一天超级幸运但有代价","白月光与天降新欢是同一人","替身竟是我自己","一天超级倒霉因祸得福","梦变成现实","画的东西走出纸面","照片里的人动了","影子和本体动作不同","听懂动物说话","丧尸爆发方圆1km","末日倒计时72h","城市空了只剩两人","天空出现第二月亮","所有人消失只剩两人和一只猫","收到坐标和倒计时","地下室的陌生门","镜中倒影延迟3秒","收到三天后自己发的消息","困在不存在的楼里","电梯按了不存在的楼层门开了"],
+    school: ["期末崩盘不敢看成绩","挂科被叫家长","考试旁边是暗恋对象无法集中","突击小测没准备","图书馆通宵备考","图书馆占座差点打起来","图书馆角落撞见熟人","同一人连续三天图书馆偶遇","秘密恋情差点被教导主任发现","走廊牵手有脚步声松开","传纸条被没收当众念","室友带人回来被迫戴耳机","宿舍停水停电","上铺床板不祥声响","室友打呼全宿舍失眠","隔壁住的居然是那个人","被迫上台忘词","舞台事故全场看着","后台化妆间对话","排练到深夜只剩两人","创作分歧差点掀桌","答辩前PPT没保存","导师临阵改题","组会被点名最难问题","修学旅行抢着挨着坐","民宿分房尴尬","夜游被老师抓","修学旅行","论文deadline剩8h","代码bug找了一天","截止前5min系统崩","竞赛搭档摩擦","决赛对手是认识的人","作弊风波被冤枉","体育课出糗","实验课炸了","食堂餐盘滑倒","校广播放歌全校知道给谁","社团招新搭讪","迎新晚会惊艳亮相","走廊撞到对方","转学生坐旁边","选课大战"],
+    work: ["储藏室","茶水间八卦被当事人听到","打印机前撞到","加班深夜只剩两人","灾难级团建","破冰游戏真心话大冒险","团建喝多说真话","KTV包厢暧昧","职场反转下属变上司","甲方变同事","甲方要\"五彩斑斓的黑\"","客户深夜连环call","100条修改意见","被投诉不是你的错","老板画饼画了三年","老板抢功","周末被at全员表情管理","会上被迫当众表态","升职管理老同事尴尬","同期一升一没升","996错过重要约会","对方三个电话没接到","出差酒店孤独夜","出差偶遇不该遇的人","出差同住一间房","调职","长期出差","公司突然解散","裁员N+1谈判","办公室恋情被传","工位挨着暗恋对象","PPT当场崩溃","汇报放错文件","邮件发错人撤不回","迟到编蹩脚理由","面试官是认识的人","\"精通\"被现场验证","工作群发了私聊","年会抽到尴尬奖","被实习生叫叔叔阿姨","开会迟到推门全场注目"]
+  };
+  var SPICE_ID = NS + '-spice', SPICE_AFTER_ID = NS + '-spice-after';
+  var SPICE_BTNS = [
+    { id: 'hot', emoji: '🌶️', name: '加辣', say: '加了一勺辣' },
+    { id: 'chaos', emoji: '🌀', name: '混乱', say: '撒了一把混乱' },
+    { id: 'fest', emoji: '🎉', name: '节日', say: '挂了一串节日彩灯' },
+    { id: 'fun', emoji: '🍬', name: '日常有趣', say: '撒了一把日常糖' }
+  ];
+  // 各类的法则：🔴🟠🟢 三段是 PLOT_DIRECTOR 原文；🟡🟣🎉 和场景原稿没写，补的，口径跟执行准则走
+  var SPICE_LAW = {
+    sour: '酸涩法则：99%的极致甜蜜 + 1%的突发心理刺痛。酸涩绝非歇斯底里的争吵或背叛，而是在剧情最幸福、最日常的顶峰，突然让角色暴露出无法言说的隐忍、权衡，或是意识到这美好终将破碎的战栗。要让 {{user}} 在最温暖的拥抱中，体验到一丝心碎。',
+    sourClean: '酸涩法则：99%的极致甜蜜 + 1%的突发心理刺痛。本次绝对屏蔽任何前任/第三者/感情背叛元素。酸涩感全部来源于：现实的压迫、为了保护对方的隐忍、自卑与傲骨的拉扯、或是极度在乎带来的占有欲。要在最温暖的拥抱中，让 {{user}} 体验到难以言说的战栗。',
+    crisis: '危机落脚点：所有危机和冲突的最终落脚点，必须是两人之间更深层的情感连接。严禁走向彻底的决裂或单纯的生存游戏。危机存在的唯一意义，是逼迫角色展现出平日里隐藏的极度偏爱、笨拙的温柔、或是为了保护对方而展现的能力。',
+    sweet: '甜蜜法则：拒绝工业糖精。日常互怼与默契，无奈托底与偏爱。表现成年人卸下防备后的极度舒适感：并肩而坐的无言陪伴、嘴硬心软的照顾、对彼此邋遢和缺点的全盘接纳。',
+    fest: '节日法则：跟着正文当前的季节和时间走。这个节日/天气和正文眼下的时节明显对不上，就换成同一时节里最接近的那一个，绝不为了过节把时间硬跳过去。',
+    chaos: '混乱法则：好笑、狼狈、真实。小事闹大，但别闹成闹剧；后果照样要收拾（伤要养、架要和、钱要还），角色的反应符合已确立的性格。',
+    brain: '脑洞法则：设定可以离谱，人不能离谱。怪事发生了，角色面对它的反应必须完全符合已确立的性格；怪事持续多久、怎么解除由剧情自然决定，不用一轮讲完。',
+    scene: '场景佐料：把它融进当前的校园/职场情境里；气质跟着这一味料的按钮走。'
+  };
+  var SPICE_GUIDE = [
+    '执行准则：',
+    '1. 沉浸式切入：严禁直接跳跃时间。至少用两种方式自然切入——环境感官（气味、温度、光线、声音、触感）/ 生理反应（心跳、呼吸、肌肉紧张）/ 突发对话、声响或外部打断 / 物件异常（手机响、东西掉落、门被推开）。',
+    '2. 生肉叙事：不少于 150 字。语言直接、无修饰；对话口语化，允许省略、打断。严禁结尾总结、感叹或上帝视角，严禁文艺腔。',
+    '3. 自主决策：{{char}} 自主做 1-3 个具体行动，至少一个直接影响 {{user}}，必须产生可观测后果，符合已确立性格（极端情况允许反差）。',
+    '4. 现实锚点：融入已确立的特质、习惯、口癖；后果延续（伤要养、架要和、钱要还）；NPC 和环境要素基本可信。',
+    '安全阀：同一轮不叠加两个以上高烈度事件；保持角色核心人格一致；严禁走向彻底的决裂或单纯的互相伤害——任何冲突和危机，最终必须为展现角色的三维性格提供契机。',
+    '这一轮只引入这一件事，引入之后留出呼吸感，让角色消化情绪，不要接着堆下一件。'
+  ].join('\n');
+
+  function spiceState() {
+    try { var v = getVariables({ type: 'chat' }); var b = v && v[LOG_KEY]; return (b && b.spice && typeof b.spice === 'object') ? b.spice : {}; } catch (e) { return {}; }
+  }
+  function setSpiceState(fn) {
+    try {
+      updateVariablesWith(function (v) { v = v || {}; v[LOG_KEY] = v[LOG_KEY] || {}; var s = v[LOG_KEY].spice || {}; fn(s); v[LOG_KEY].spice = s; return v; }, { type: 'chat' });
+    } catch (e) {}
+  }
+  // 候选池：[权重, 显示标签, 法则键, 词表]
+  function spiceGroups(btn) {
+    var G = [], sp = settings.spice;
+    function subs(obj, tag, law) { Object.keys(obj).forEach(function (k) { G.push([1, tag + '·' + k, law, obj[k]]); }); }
+    if (btn === 'hot') {
+      if (sp.clean) subs(SPICE.sourClean, '🟠 冲突与酸涩（洁党版）', 'sourClean'); else subs(SPICE.sour, '🟠 冲突与酸涩', 'sour');
+      if (sp.crisis) { G.push([2, '🔴 危机·高压与微小折磨', 'crisis', SPICE.crisisSmall]); G.push([0.3, '🔴 危机·严重危机', 'crisis', SPICE.crisisBig]); }
+    } else if (btn === 'chaos') {
+      subs(SPICE.chaos, '🟡 日常混乱', 'chaos');
+      if (sp.brain) G.push([1.5, '🟣 脑洞大开', 'brain', SPICE.brain]);
+    } else if (btn === 'fest') {
+      G.push([1, '🟢 季节与节日', 'fest', SPICE.fest]);
+    } else {
+      subs(SPICE.sweet, '🟢 温馨与甜蜜', 'sweet');
+      subs(SPICE.fun, '🟡 日常混乱', 'chaos');
+    }
+    if (btn !== 'fest' && (sp.scene === 'school' || sp.scene === 'work')) {
+      var tot = G.reduce(function (a, g) { return a + g[0]; }, 0);
+      G.push([tot * 2 / 3, sp.scene === 'school' ? '🔵 校园' : '🟤 职场', 'scene', sp.scene === 'school' ? SPICE.school : SPICE.work]);   // ≈ 四成
+    }
+    return G;
+  }
+  function drawSpice(btn) {
+    var used = spiceState().used || [];
+    var G = spiceGroups(btn).map(function (g) { return [g[0], g[1], g[2], g[3].filter(function (w) { return used.indexOf(w) < 0; })]; }).filter(function (g) { return g[3].length; });
+    if (!G.length) { G = spiceGroups(btn); used = []; }   // 这一类全抽过了 → 从头来
+    var tot = G.reduce(function (a, g) { return a + g[0]; }, 0), r = Math.random() * tot, g = G[G.length - 1];
+    for (var i = 0; i < G.length; i++) { r -= G[i][0]; if (r < 0) { g = G[i]; break; } }
+    return { word: g[3][Math.floor(Math.random() * g[3].length)], cat: g[1], law: g[2] };
+  }
+  function lastAiKey() {
+    try { var id = getLastMessageId(); var lm = (getChatMessages(id) || [])[0]; if (!lm) return 'none'; return lm.role === 'user' ? 'u' + id : (autoKeyOf(id, lm.message) || 'e' + id); } catch (e) { return 'none'; }
+  }
+  function spiceContent(pd) {
+    var b = SPICE_BTNS.filter(function (x) { return x.id === pd.btn; })[0] || SPICE_BTNS[0];
+    return '[幕后指令（来自剧情系统，不要复述、不要提及本段本身）：这一轮给剧情加一味料——「' + pd.word + '」（' + pd.cat + '，' + b.emoji + b.name + '）。' +
+      '让它从当前场景里自然长出来，贴合眼下的人物关系和上文埋下的细节，而不是凭空砸下来。\n' +
+      (SPICE_LAW[pd.law] || '') + '\n' + SPICE_GUIDE + ']';
+  }
+  function injectSpice(pd) {
+    try { uninjectPrompts([SPICE_ID]); injectPrompts([{ id: SPICE_ID, position: 'in_chat', depth: 0, role: 'system', content: spiceContent(pd), should_scan: false }], { once: true }); } catch (e) {}
+  }
+  function syncSpiceAfter() {
+    try {
+      var a = spiceState().after;
+      uninjectPrompts([SPICE_AFTER_ID]);
+      if (!a || !(a.left > 0)) return;
+      injectPrompts([{ id: SPICE_AFTER_ID, position: 'in_chat', depth: 4, role: 'system', should_scan: false,
+        content: '[剧情备忘（不要复述、不要提及本段本身）：前面发生过「' + a.word + '」这件事，它的后果还没完全过去——伤要养、架要和、钱要还，情绪以微表情、语气、行为模式残留。不要因此再加新事件。{{user}} 表示不想继续这条线，就自然收掉。]' }]);
+    } catch (e) {}
+  }
+  function spiceClick(btn) {
+    if (!SPICE) { toast('这一版没带调料', 'warn'); return; }
+    var old = spiceState().pending;
+    var d = drawSpice(btn);
+    var pd = { btn: btn, word: d.word, cat: d.cat, law: d.law, from: lastAiKey(), ts: Date.now() };
+    setSpiceState(function (s) { s.pending = pd; s.used = (s.used || []).concat([d.word]).slice(-80); });
+    injectSpice(pd);
+    var b = SPICE_BTNS.filter(function (x) { return x.id === btn; })[0];
+    var line = settings.spice.blind
+      ? b.emoji + ' ' + (old ? '倒掉刚才那勺，重新' : '') + b.say + '，发条消息就生效（正文写完揭晓）'
+      : b.emoji + ' ' + (old ? '换成' : '加料') + '：' + d.word + '（' + d.cat + '）';
+    pushLog({ who: 'sys', text: line, ts: Date.now() });
+    renderBody(); scrollBottom(); renderSpiceBar();
+    toast(settings.spice.blind ? b.emoji + ' ' + (old ? '换了一勺，' : '') + '发条消息就生效' : b.emoji + ' ' + d.word, 'ok');
+  }
+  // 正文真写完一层时调（GENERATION_ENDED + 900ms）：有 pending 且这层是点完之后新写的 → 揭晓 + 开始后果延续；否则后果延续倒数一格
+  var lastSpiceKey = '';
+  function spiceTick() {
+    if (mainGenerating()) return;
+    var key = lastAiKey();
+    if (/^(none|u)/.test(key) || key === lastSpiceKey) return;
+    lastSpiceKey = key;
+    var st = spiceState();
+    if (st.pending && key !== st.pending.from) {
+      var pd = st.pending;
+      setSpiceState(function (s) { s.pending = null; s.reveal = pd; s.after = { word: pd.word, left: 3 }; });
+      try { uninjectPrompts([SPICE_ID]); } catch (e) {}
+      var b = SPICE_BTNS.filter(function (x) { return x.id === pd.btn; })[0] || SPICE_BTNS[0];
+      pushLog({ who: 'sys', text: b.emoji + ' 刚才加的料：「' + pd.word + '」（' + pd.cat + '）', ts: Date.now() });
+      if (mounted) { renderBody(); scrollBottom(); renderSpiceBar(); }
+      syncSpiceAfter();
+      return;
+    }
+    if (st.after && st.after.left > 0) {
+      setSpiceState(function (s) { s.after.left--; if (s.after.left <= 0) s.after = null; });
+      syncSpiceAfter();
+    }
+  }
+  // 人格开口时取一次：刚揭晓的料 → 拼进提问里，让它能点评；取完就清
+  function takeSpiceReveal() {
+    var r = spiceState().reveal; if (!r) return '';
+    setSpiceState(function (s) { s.reveal = null; });
+    var b = SPICE_BTNS.filter(function (x) { return x.id === r.btn; })[0] || SPICE_BTNS[0];
+    return '（顺便：<user>上一轮偷偷按了「' + b.emoji + b.name + '」给剧情加了料，抽到的是「' + r.word + '」（' + r.cat + '）。最新这层正文就是加料之后的样子。想点评这味料加得怎么样就点评，不想就算。）';
+  }
+  function renderSpiceBar() {
+    var bar = DOC.querySelector('#' + NS + '-panel .tl-spice'); if (!bar) return;
+    if (!settings.spice.bar || !SPICE) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    var pend = spiceState().pending;
+    bar.innerHTML = SPICE_BTNS.map(function (b) {
+      return '<button data-sp="' + b.id + '" class="' + (pend && pend.btn === b.id ? 'on' : '') + '" title="' + (pend && pend.btn === b.id ? '已经加了一勺，再点换一勺' : '给下一轮剧情加一味料') + '">' + b.emoji + ' ' + b.name + '</button>';
+    }).join('');
+    bar.querySelectorAll('button[data-sp]').forEach(function (x) { x.addEventListener('click', function () { spiceClick(this.getAttribute('data-sp')); }); });
+  }
+
+  /* ================================================================
      事件
      ================================================================ */
   // 0.1.37（Fan 报「它没读最新一层，读到倒数第二层为止」——蒋默那局第 4 层实锤：01:06 它就对「第 4 层」开了口，
@@ -1943,17 +2145,18 @@
     } catch (e) {}
     try {
       // 信号来了先等 900ms 再判断（MVU 之类在 MESSAGE_RECEIVED 里改正文，给它们留时间），判断全在 checkAuto
+      // 0.1.41：🧂 加料的揭晓/后果倒数不看自动开关，先走；自动开口还是只在开着时
       H.gen = function () {
-        if (!settings.auto) return;
-        setTimeout(checkAuto, 900);
+        setTimeout(function () { try { spiceTick(); } catch (e) {} if (settings.auto) checkAuto(); }, 900);
       };
       eventOn(tavern_events.GENERATION_ENDED, H.gen);
     } catch (e) {}
     try {
-      H.chat = function () { activatedEntries = []; lastAutoKey = ''; autoCounter = 0; pendingAuto = false; setUnread(0); if (mounted) { renderBody(); } setTimeout(syncPresence, 400); };
+      H.chat = function () { activatedEntries = []; lastAutoKey = ''; autoCounter = 0; pendingAuto = false; lastSpiceKey = ''; setUnread(0); if (mounted) { renderBody(); renderSpiceBar(); } setTimeout(syncPresence, 400); setTimeout(syncSpiceAfter, 400); };
       eventOn(tavern_events.CHAT_CHANGED, H.chat);
     } catch (e) {}
-    try { H.before = function () { syncPresence(); }; eventOn(tavern_events.GENERATION_AFTER_COMMANDS, H.before); } catch (e) {}
+    // 0.1.41：点了料还没用上（刷新过页面、或一次性注入被小狸自己那次调用吃掉了）→ 主线每次生成前补注一遍
+    try { H.before = function () { syncPresence(); if (selfGen > 0) return; var pd = spiceState().pending; if (pd) injectSpice(pd); syncSpiceAfter(); }; eventOn(tavern_events.GENERATION_AFTER_COMMANDS, H.before); } catch (e) {}
     try {
       H.btn = function () { if (!mounted) mount(); var open = isOpen(); placeBall(); setOpen(!open); if (!open) setUnread(0); };
       if (typeof replaceScriptButtons === 'function') replaceScriptButtons([{ name: BTN, visible: true }]);
@@ -1991,7 +2194,7 @@
     if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
     if (kvTimer) { clearTimeout(kvTimer); kvTimer = null; }
     if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
-    try { uninjectPrompts([ADOPT_ID, PRESENCE_ID]); } catch (e) {}
+    try { uninjectPrompts([ADOPT_ID, PRESENCE_ID, SPICE_ID, SPICE_AFTER_ID]); } catch (e) {}
     if (VIEW[INSTANCE_KEY] === cleanup) VIEW[INSTANCE_KEY] = null;
     console.log('[小狸Live] 收拾干净走了');
   }
@@ -2005,6 +2208,7 @@
   bindEvents();
   mount();
   syncPresence();
+  syncSpiceAfter();
   console.log('%c🦝 酒馆小狸 Live %cv' + VERSION + ' · ' + currentPersona().emoji + ' ' + dispName(currentPersona()) + ' 坐下了',
     'font-weight:700;color:#fff;background:#e85d75;padding:3px 8px;border-radius:4px 0 0 4px',
     'color:#ddd;background:#1a1a2e;padding:3px 8px;border-radius:0 4px 4px 0');
