@@ -35,6 +35,8 @@
  *                           一词定论（每次换词）/ 什么都「两周后」/ 辩输了照样宣布胜利——轮着犯，不一条全用
  *       0.1.43 (2026-09-23) 🎭 狗血技能键（Fan 的另两本世界书，「像打游戏加血一样要啥按一下」）：🌙 男二 / 👠 女配 / 🥀 男配 /
  *                           ⚔️ 雄竞（盲抽古早版或文明降维版）/ 💅 雌竞，全是一次性，走加料同一条管道：揭晓、人格点评、3 层余波
+ *       0.1.44 (2026-09-23) Fan：两排雷霆大按钮影响日常聊天 → 全收进输入框左边一个 🧂 键，点开才出现，选完自动收；
+ *                           装填了料的时候 🧂 变成那一味的 emoji、描一圈边，一眼知道下一轮带着东西
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -53,7 +55,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.43';
+  var VERSION = '0.1.44';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -754,6 +756,10 @@
       '#' + NS + '-panel textarea{flex:1;min-height:38px;max-height:110px;resize:none;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06) !important;background-color:rgba(255,255,255,.06) !important;color:#fff !important;-webkit-text-fill-color:#fff;padding:9px 11px;font:inherit;outline:none;line-height:1.4;appearance:none;-webkit-appearance:none;box-shadow:none}',
       '#' + NS + '-panel textarea:focus{border-color:' + p.color + '}',
       '#' + NS + '-panel .tl-send{width:38px;height:38px;border-radius:11px;border:0;background:' + p.color + ';color:#fff;cursor:pointer;font-size:15px;flex:none;display:flex;align-items:center;justify-content:center}',
+      // 0.1.44 🧂 收纳键：两排技能平时收着，点它才展开（Fan：几个雷霆大按钮影响日常聊天）
+      '#' + NS + '-panel .tl-kit{width:48px;min-height:38px;align-self:stretch;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;font-size:16px;flex:none;display:flex;align-items:center;justify-content:center;padding:0;font-size:24px}',
+      '#' + NS + '-panel .tl-kit.open{background:rgba(255,255,255,.16)}',
+      '#' + NS + '-panel .tl-kit.loaded{border-color:' + p.color + ';box-shadow:0 0 0 1px ' + p.color + ' inset}',
       '#' + NS + '-panel .tl-send:disabled{opacity:.5;cursor:default}',
       '#' + NS + '-panel .tl-set{position:absolute;inset:0;background:rgba(22,24,32,.98);display:none;flex-direction:column;padding:12px;overflow-y:auto;gap:12px;z-index:5}',
       '#' + NS + '-panel .tl-set.open{display:flex}',
@@ -1033,7 +1039,7 @@
       '<div class="tl-body"></div>' +
       '<div class="tl-spice"></div>' +
       '<div class="tl-spice tl-drama"></div>' +
-      '<div class="tl-foot"><textarea placeholder="问它点什么，或者让它闭嘴…（Enter 发送，Shift+Enter 换行）"></textarea><button class="tl-send">➤</button></div>' +
+      '<div class="tl-foot"><button class="tl-kit" title="加料 / 狗血技能">🧂</button><textarea placeholder="问它点什么，或者让它闭嘴…（Enter 发送，Shift+Enter 换行）"></textarea><button class="tl-send">➤</button></div>' +
       '<div class="tl-set"></div>';
     DOC.body.appendChild(panel);
     bindPanelDrag(panel);
@@ -1055,6 +1061,7 @@
     var sendBtn = panel.querySelector('.tl-send');
     function doSend() { var t = ta.value.trim(); if (!t) return; ta.value = ''; ta.style.height = ''; ask(t); }
     sendBtn.addEventListener('click', doSend);
+    panel.querySelector('.tl-kit').addEventListener('click', function () { spiceOpen = !spiceOpen; renderSpiceBar(); if (spiceOpen) scrollBottom(); });
     ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); doSend(); } });
     ta.addEventListener('input', function () { this.style.height = ''; this.style.height = Math.min(110, this.scrollHeight) + 'px'; });
 
@@ -1241,7 +1248,7 @@
       '<div class="tl-note">小窗收着的时候，它说的话直接冒在悬浮球顶上，几秒后自己缩回去；点气泡展开小窗看全文。关掉就只留红点。</div>' +
       '<h4>🧂 加料</h4>' +
       '<div class="tl-note">调料来自 fannnnnnn 的第一本世界书 PLOT_DIRECTOR。输入框上面那排：🌶️ 加辣（冲突与酸涩）/ 🌀 混乱（日常翻车）/ 🎉 节日（季节与节日）/ 🍬 日常有趣（甜、同居、恶作剧、奇遇）。点一下抽一味料，下一轮正文自然加进去，只加这一次；不点就一点都不加。</div>' +
-      '<label>显示加料条 <button class="tl-pill tl-sp" data-k="bar">' + (settings.spice.bar ? '开' : '关') + '</button></label>' +
+      '<label>输入框左边的 🧂 键 <button class="tl-pill tl-sp" data-k="bar">' + (settings.spice.bar ? '开' : '关') + '</button></label>' +
       '<label>显示狗血键（🌙 男二 👠 女配 🥀 男配 ⚔️ 雄竞 💅 雌竞） <button class="tl-pill tl-sp" data-k="drama">' + (settings.spice.drama ? '开' : '关') + '</button></label>' +
       '<div class="tl-note">加料条下面第二排，同样来自 fannnnnnn 的世界书（男二上位 / 古早修罗场）。要啥按一下，只丢一次。⚔️ 雄竞每次盲抽一种路子：古早修罗场版，或者文明降维版（男二无视 / 默契 / 从容 / 退一步）。</div>' +
       '<label>盲盒（正文写完才揭晓抽到什么） <button class="tl-pill tl-sp" data-k="blind">' + (settings.spice.blind ? '开' : '关') + '</button></label>' +
@@ -1954,6 +1961,7 @@
     school: ["期末崩盘不敢看成绩","挂科被叫家长","考试旁边是暗恋对象无法集中","突击小测没准备","图书馆通宵备考","图书馆占座差点打起来","图书馆角落撞见熟人","同一人连续三天图书馆偶遇","秘密恋情差点被教导主任发现","走廊牵手有脚步声松开","传纸条被没收当众念","室友带人回来被迫戴耳机","宿舍停水停电","上铺床板不祥声响","室友打呼全宿舍失眠","隔壁住的居然是那个人","被迫上台忘词","舞台事故全场看着","后台化妆间对话","排练到深夜只剩两人","创作分歧差点掀桌","答辩前PPT没保存","导师临阵改题","组会被点名最难问题","修学旅行抢着挨着坐","民宿分房尴尬","夜游被老师抓","修学旅行","论文deadline剩8h","代码bug找了一天","截止前5min系统崩","竞赛搭档摩擦","决赛对手是认识的人","作弊风波被冤枉","体育课出糗","实验课炸了","食堂餐盘滑倒","校广播放歌全校知道给谁","社团招新搭讪","迎新晚会惊艳亮相","走廊撞到对方","转学生坐旁边","选课大战"],
     work: ["储藏室","茶水间八卦被当事人听到","打印机前撞到","加班深夜只剩两人","灾难级团建","破冰游戏真心话大冒险","团建喝多说真话","KTV包厢暧昧","职场反转下属变上司","甲方变同事","甲方要\"五彩斑斓的黑\"","客户深夜连环call","100条修改意见","被投诉不是你的错","老板画饼画了三年","老板抢功","周末被at全员表情管理","会上被迫当众表态","升职管理老同事尴尬","同期一升一没升","996错过重要约会","对方三个电话没接到","出差酒店孤独夜","出差偶遇不该遇的人","出差同住一间房","调职","长期出差","公司突然解散","裁员N+1谈判","办公室恋情被传","工位挨着暗恋对象","PPT当场崩溃","汇报放错文件","邮件发错人撤不回","迟到编蹩脚理由","面试官是认识的人","\"精通\"被现场验证","工作群发了私聊","年会抽到尴尬奖","被实习生叫叔叔阿姨","开会迟到推门全场注目"]
   };
+  var spiceOpen = false;   // 0.1.44：技能面板开没开（不存，刷新就收起）
   var SPICE_ID = NS + '-spice', SPICE_AFTER_ID = NS + '-spice-after';
   var SPICE_BTNS = [
     { id: 'hot', emoji: '🌶️', name: '加辣', say: '加了一勺辣' },
@@ -2056,6 +2064,7 @@
       ? b.emoji + ' ' + (old ? '倒掉刚才那勺，重新' : '') + b.say + '，发条消息就生效（正文写完揭晓）'
       : b.emoji + ' ' + (old ? '换成' : '加料') + '：' + d.word + '（' + d.cat + '）';
     pushLog({ who: 'sys', text: line, ts: Date.now() });
+    spiceOpen = false;
     renderBody(); scrollBottom(); renderSpiceBar();
     toast(settings.spice.blind ? b.emoji + ' ' + (old ? '换了一勺，' : '') + '发条消息就生效' : b.emoji + ' ' + d.word, 'ok');
   }
@@ -2093,7 +2102,14 @@
   }
   function renderSpiceBar() {
     var bar = DOC.querySelector('#' + NS + '-panel .tl-spice:not(.tl-drama)'); if (!bar) return;
-    if (!settings.spice.bar || !SPICE) { bar.style.display = 'none'; renderDramaBar(); return; }
+    var kit = DOC.querySelector('#' + NS + '-panel .tl-kit'), pk = spiceState().pending;
+    if (kit) {
+      kit.style.display = (settings.spice.bar && SPICE) ? 'flex' : 'none';
+      kit.classList.toggle('open', spiceOpen); kit.classList.toggle('loaded', !!pk);
+      kit.textContent = pk ? btnOf(pk.btn).emoji : '🧂';
+      kit.title = pk ? '已装填：' + btnOf(pk.btn).name + '（发条消息就生效）· 点开换一个' : '加料 / 狗血技能';
+    }
+    if (!settings.spice.bar || !SPICE || !spiceOpen) { bar.style.display = 'none'; renderDramaBar(); return; }
     bar.style.display = 'flex';
     var pend = spiceState().pending;
     bar.innerHTML = SPICE_BTNS.map(function (b) {
@@ -2174,12 +2190,13 @@
     setSpiceState(function (s) { s.pending = pd; });
     injectSpice(pd);
     pushLog({ who: 'sys', text: S.emoji + ' ' + (old ? '换成：' : '') + S.full + '，发条消息就生效（正文写完揭晓）', ts: Date.now() });
+    spiceOpen = false;
     renderBody(); scrollBottom(); renderSpiceBar();
     toast(S.emoji + ' ' + S.full + '：发条消息就生效', 'ok');
   }
   function renderDramaBar() {
     var bar = DOC.querySelector('#' + NS + '-panel .tl-drama'); if (!bar) return;
-    if (!settings.spice.bar || !settings.spice.drama || !DRAMA_TEXT) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    if (!settings.spice.bar || !settings.spice.drama || !DRAMA_TEXT || !spiceOpen) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     bar.style.display = 'flex';
     var pend = spiceState().pending;
     bar.innerHTML = DRAMA_ORDER.map(function (k) {
