@@ -33,6 +33,8 @@
  *                           点一下本地抽一个词一次性注入下一轮；盲盒揭晓、人格能点评；后果延续 3 层；设置里开关危机/洁党/脑洞/场景
  *       0.1.42 (2026-09-23) 特朗噗加原型招牌（Fan 点头的）：现编数据 / Sir 含泪小故事 / 「没人知道」/ 岔出去再硬说连着 /
  *                           一词定论（每次换词）/ 什么都「两周后」/ 辩输了照样宣布胜利——轮着犯，不一条全用
+ *       0.1.43 (2026-09-23) 🎭 狗血技能键（Fan 的另两本世界书，「像打游戏加血一样要啥按一下」）：🌙 男二 / 👠 女配 / 🥀 男配 /
+ *                           ⚔️ 雄竞（盲抽古早版或文明降维版）/ 💅 雌竞，全是一次性，走加料同一条管道：揭晓、人格点评、3 层余波
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -51,7 +53,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.42';
+  var VERSION = '0.1.43';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -413,7 +415,7 @@
      设置 & 存储
      ================================================================ */
   var settings = { persona: 'shipper', auto: true, everyN: 1, ctxFloors: 6, bubble: true, adoptMode: 'inject', snap: true, presence: false, group: { on: false, members: ['shipper', 'villain', 'mom'] }, custom: [], pos: null,
-    spice: { bar: true, blind: true, crisis: false, clean: false, brain: true, scene: '' } };
+    spice: { bar: true, drama: true, blind: true, crisis: false, clean: false, brain: true, scene: '' } };
   var GROUP_MAX = 9;   // 0.1.34：玩家说 3 个不够坐 → 6；0.1.38 Fan 点的 → 9（上限只在这里写一次，别再往别处抄数字）
   // 自定义 API 单独存 parent 的 localStorage（不进脚本变量 → 导出脚本绝不带 key）
   // 结构和 Sugar Baby 手机的 sbnyc_api_cfg 一模一样 {url,key,model}（OpenAI 兼容，直接 fetch，不走酒馆管线 → 记忆插件塞不进来）
@@ -453,7 +455,7 @@
         if (Array.isArray(raw.custom)) settings.custom = raw.custom;
         if (raw.pos && typeof raw.pos === 'object') settings.pos = raw.pos;
         if (raw.posNarrow && typeof raw.posNarrow === 'object') settings.posNarrow = raw.posNarrow;
-        if (raw.spice && typeof raw.spice === 'object') ['bar', 'blind', 'crisis', 'clean', 'brain'].forEach(function (k) { if (typeof raw.spice[k] === 'boolean') settings.spice[k] = raw.spice[k]; });
+        if (raw.spice && typeof raw.spice === 'object') ['bar', 'drama', 'blind', 'crisis', 'clean', 'brain'].forEach(function (k) { if (typeof raw.spice[k] === 'boolean') settings.spice[k] = raw.spice[k]; });
         if (raw.spice && (raw.spice.scene === '' || raw.spice.scene === 'school' || raw.spice.scene === 'work')) settings.spice.scene = raw.spice.scene;
         if (raw.panelPos && typeof raw.panelPos === 'object') settings.panelPos = raw.panelPos;
       }
@@ -746,6 +748,7 @@
       '#' + NS + '-panel .tl-spice{display:flex;gap:6px;padding:7px 10px 0;border-top:1px solid rgba(255,255,255,.08)}',
       '#' + NS + '-panel .tl-spice button{flex:1;min-width:0;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#e6e6ee;border-radius:999px;padding:5px 4px;font-size:12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:inherit}',
       '#' + NS + '-panel .tl-spice button:hover{background:rgba(255,255,255,.12)}',
+      '#' + NS + '-panel .tl-spice.tl-drama{border-top:0;display:none}',
       '#' + NS + '-panel .tl-spice button.on{background:' + p.color + ';border-color:transparent;color:#fff}',
       '#' + NS + '-panel .tl-foot{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.08);align-items:flex-end}',
       '#' + NS + '-panel textarea{flex:1;min-height:38px;max-height:110px;resize:none;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06) !important;background-color:rgba(255,255,255,.06) !important;color:#fff !important;-webkit-text-fill-color:#fff;padding:9px 11px;font:inherit;outline:none;line-height:1.4;appearance:none;-webkit-appearance:none;box-shadow:none}',
@@ -1029,6 +1032,7 @@
       '</div>' +
       '<div class="tl-body"></div>' +
       '<div class="tl-spice"></div>' +
+      '<div class="tl-spice tl-drama"></div>' +
       '<div class="tl-foot"><textarea placeholder="问它点什么，或者让它闭嘴…（Enter 发送，Shift+Enter 换行）"></textarea><button class="tl-send">➤</button></div>' +
       '<div class="tl-set"></div>';
     DOC.body.appendChild(panel);
@@ -1238,6 +1242,8 @@
       '<h4>🧂 加料</h4>' +
       '<div class="tl-note">调料来自 fannnnnnn 的第一本世界书 PLOT_DIRECTOR。输入框上面那排：🌶️ 加辣（冲突与酸涩）/ 🌀 混乱（日常翻车）/ 🎉 节日（季节与节日）/ 🍬 日常有趣（甜、同居、恶作剧、奇遇）。点一下抽一味料，下一轮正文自然加进去，只加这一次；不点就一点都不加。</div>' +
       '<label>显示加料条 <button class="tl-pill tl-sp" data-k="bar">' + (settings.spice.bar ? '开' : '关') + '</button></label>' +
+      '<label>显示狗血键（🌙 男二 👠 女配 🥀 男配 ⚔️ 雄竞 💅 雌竞） <button class="tl-pill tl-sp" data-k="drama">' + (settings.spice.drama ? '开' : '关') + '</button></label>' +
+      '<div class="tl-note">加料条下面第二排，同样来自 fannnnnnn 的世界书（男二上位 / 古早修罗场）。要啥按一下，只丢一次。⚔️ 雄竞每次盲抽一种路子：古早修罗场版，或者文明降维版（男二无视 / 默契 / 从容 / 退一步）。</div>' +
       '<label>盲盒（正文写完才揭晓抽到什么） <button class="tl-pill tl-sp" data-k="blind">' + (settings.spice.blind ? '开' : '关') + '</button></label>' +
       '<label>🌶️ 里混进 🔴 危机 <button class="tl-pill tl-sp" data-k="crisis">' + (settings.spice.crisis ? '开' : '关') + '</button></label>' +
       '<label>🌶️ 用洁党纯净版（没有前任/第三者） <button class="tl-pill tl-sp" data-k="clean">' + (settings.spice.clean ? '开' : '关') + '</button></label>' +
@@ -2018,7 +2024,8 @@
     try { var id = getLastMessageId(); var lm = (getChatMessages(id) || [])[0]; if (!lm) return 'none'; return lm.role === 'user' ? 'u' + id : (autoKeyOf(id, lm.message) || 'e' + id); } catch (e) { return 'none'; }
   }
   function spiceContent(pd) {
-    var b = SPICE_BTNS.filter(function (x) { return x.id === pd.btn; })[0] || SPICE_BTNS[0];
+    var b = btnOf(pd.btn);
+    if (DRAMA_SUMMON[pd.btn]) return dramaInject(pd);
     return '[幕后指令（来自剧情系统，不要复述、不要提及本段本身）：这一轮给剧情加一味料——「' + pd.word + '」（' + pd.cat + '，' + b.emoji + b.name + '）。' +
       '让它从当前场景里自然长出来，贴合眼下的人物关系和上文埋下的细节，而不是凭空砸下来。\n' +
       (SPICE_LAW[pd.law] || '') + '\n' + SPICE_GUIDE + ']';
@@ -2032,7 +2039,9 @@
       uninjectPrompts([SPICE_AFTER_ID]);
       if (!a || !(a.left > 0)) return;
       injectPrompts([{ id: SPICE_AFTER_ID, position: 'in_chat', depth: 4, role: 'system', should_scan: false,
-        content: '[剧情备忘（不要复述、不要提及本段本身）：前面发生过「' + a.word + '」这件事，它的后果还没完全过去——伤要养、架要和、钱要还，情绪以微表情、语气、行为模式残留。不要因此再加新事件。{{user}} 表示不想继续这条线，就自然收掉。]' }]);
+        content: a.kind
+          ? dramaAfter(a)
+          : '[剧情备忘（不要复述、不要提及本段本身）：前面发生过「' + a.word + '」这件事，它的后果还没完全过去——伤要养、架要和、钱要还，情绪以微表情、语气、行为模式残留。不要因此再加新事件。{{user}} 表示不想继续这条线，就自然收掉。]' }]);
     } catch (e) {}
   }
   function spiceClick(btn) {
@@ -2042,7 +2051,7 @@
     var pd = { btn: btn, word: d.word, cat: d.cat, law: d.law, from: lastAiKey(), ts: Date.now() };
     setSpiceState(function (s) { s.pending = pd; s.used = (s.used || []).concat([d.word]).slice(-80); });
     injectSpice(pd);
-    var b = SPICE_BTNS.filter(function (x) { return x.id === btn; })[0];
+    var b = btnOf(btn);
     var line = settings.spice.blind
       ? b.emoji + ' ' + (old ? '倒掉刚才那勺，重新' : '') + b.say + '，发条消息就生效（正文写完揭晓）'
       : b.emoji + ' ' + (old ? '换成' : '加料') + '：' + d.word + '（' + d.cat + '）';
@@ -2060,10 +2069,11 @@
     var st = spiceState();
     if (st.pending && key !== st.pending.from) {
       var pd = st.pending;
-      setSpiceState(function (s) { s.pending = null; s.reveal = pd; s.after = { word: pd.word, left: 3 }; });
+      var isNpc = !!DRAMA_SUMMON[pd.btn];
+      setSpiceState(function (s) { s.pending = null; s.reveal = pd; s.after = { word: pd.word, left: 3, kind: isNpc ? DRAMA_SUMMON[pd.btn].after : '' }; });
       try { uninjectPrompts([SPICE_ID]); } catch (e) {}
-      var b = SPICE_BTNS.filter(function (x) { return x.id === pd.btn; })[0] || SPICE_BTNS[0];
-      pushLog({ who: 'sys', text: b.emoji + ' 刚才加的料：「' + pd.word + '」（' + pd.cat + '）', ts: Date.now() });
+      var b = btnOf(pd.btn);
+      pushLog({ who: 'sys', text: isNpc ? b.emoji + ' ' + DRAMA_SUMMON[pd.btn].arrived : b.emoji + ' 刚才加的料：「' + pd.word + '」（' + pd.cat + '）', ts: Date.now() });
       if (mounted) { renderBody(); scrollBottom(); renderSpiceBar(); }
       syncSpiceAfter();
       return;
@@ -2077,18 +2087,106 @@
   function takeSpiceReveal() {
     var r = spiceState().reveal; if (!r) return '';
     setSpiceState(function (s) { s.reveal = null; });
-    var b = SPICE_BTNS.filter(function (x) { return x.id === r.btn; })[0] || SPICE_BTNS[0];
+    var b = btnOf(r.btn);
+    if (DRAMA_SUMMON[r.btn]) return '（顺便：<user>上一轮按了「' + b.emoji + b.name + '」，' + DRAMA_SUMMON[r.btn].did + '（' + r.cat + '）。最新这层正文就是结果。想点评就点评——这人怎么样、这场戏接下来会怎么打，不想就算。）';
     return '（顺便：<user>上一轮偷偷按了「' + b.emoji + b.name + '」给剧情加了料，抽到的是「' + r.word + '」（' + r.cat + '）。最新这层正文就是加料之后的样子。想点评这味料加得怎么样就点评，不想就算。）';
   }
   function renderSpiceBar() {
-    var bar = DOC.querySelector('#' + NS + '-panel .tl-spice'); if (!bar) return;
-    if (!settings.spice.bar || !SPICE) { bar.style.display = 'none'; return; }
+    var bar = DOC.querySelector('#' + NS + '-panel .tl-spice:not(.tl-drama)'); if (!bar) return;
+    if (!settings.spice.bar || !SPICE) { bar.style.display = 'none'; renderDramaBar(); return; }
     bar.style.display = 'flex';
     var pend = spiceState().pending;
     bar.innerHTML = SPICE_BTNS.map(function (b) {
       return '<button data-sp="' + b.id + '" class="' + (pend && pend.btn === b.id ? 'on' : '') + '" title="' + (pend && pend.btn === b.id ? '已经加了一勺，再点换一勺' : '给下一轮剧情加一味料') + '">' + b.emoji + ' ' + b.name + '</button>';
     }).join('');
     bar.querySelectorAll('button[data-sp]').forEach(function (x) { x.addEventListener('click', function () { spiceClick(this.getAttribute('data-sp')); }); });
+    renderDramaBar();
+  }
+
+  /* ================================================================
+     🎭 狗血技能键（0.1.43）— Fan 的另外两本世界书（男二上位 / 古早修罗场）缝进来
+     Fan：「就像打游戏加血一样，要加啥就按一下」——不做常驻模式，全是一次性按钮，跟 🧂 加料同一条管道：
+     点一下 → 一次性注入下一轮 → 正文写完揭晓 → 陪玩人格能点评 → 之后 3 层挂一句余波备忘。
+       🌙 男二  ＝ 附赠「SML 生成模板」（改成不跳出扮演、设定只在心里定）+ 条目4「SML 接入空间」；
+                  余波 3 层带条目3 核心原则 + 条目5 反封锁（男二刚出现那几层最需要：男主别霸总、别处处搅局）
+       👠 女配  ＝ 不速之客·娇花
+       🥀 男配  ＝ 不速之客·蓝颜（修了「一名一名」）
+       ⚔️ 雄竞  ＝ 盲抽两种路子：古早修罗场版（主权竞逐）/ 文明降维版（条目6 四种方式抽一种 + 禁止项）——两本方向相反，所以一次只抽一边
+       💅 雌竞  ＝ 锦绣机锋·红颜协议
+     古早那本的条目都是常驻写法（「每当…」），这里前面加一句「这一轮就触发一次」；末尾统一带全员沉沦那句「虐是过程，爽和甜才是终点」。
+     条目原文由脚本从世界书 JSON 原样搬进来。
+     ================================================================ */
+  var DRAMA_TEXT = {
+    smlSummon: "先看当前故事里有没有现成的男二（SML）：已经有一个在跟 {{user}} 产生超越普通社交距离的互动、但还没被定义为伴侣的男性角色，就直接用他，这一轮让他往前走一步，不要另造新人，下面的要求只当检查他够不够立体。确实没有，才悄悄引入一个新的，在下一个合理的节点让他自然出场。不管哪种都不要跳出角色扮演，不要在正文里列设定表——设定只在你心里定好，通过他的言行让 {{user}} 自己感受到。\n1. 与 {{user}} 当前伴侣（ML）形成鲜明对比——不是简单的\"更好\"，而是在不同维度上吸引人\n2. 人格必须多面立体：有优点也有明显缺点，有自己的目标和困境\n3. 与 {{user}} 的连接方式从以下选择一种或组合：精神共鸣型 / 利益同盟型 / 反差型 / 其他（请自行发挥）\n4. 他进入 {{user}} 生活的方式必须自然——工作接触/共同朋友/邻居/同一个健身房/任何合理渠道\n5. 绝不能是\"完美男人\"模板。他必须有让人皱眉的地方，但那些地方不影响他的核心魅力\n6. 心里定好：姓名、年龄、职业、外貌、性格核心矛盾、与 {{user}} 的初始关系、他的\"杀手锏\"（最能打动 {{user}} 的特质）。这一轮只让杀手锏露一角，别一次亮完。",
+    smlSpace: "[男二上位：SML接入空间]\n\n# SML的核心竞争力\nSML能吸引User，不是因为\"更帅\"或\"更有钱\"，而是因为他提供了ML缺失的东西。\n\n可能的竞争维度（根据SML人设选择）：\n- 情绪感知力：精准捕捉User没说出口的情绪变化，给出恰到好处的回应——不过度、不做作\n- 精神共鸣：和User在某个领域有深度的思想交流，让User产生\"他懂我\"的感受\n- 尊重边界：不替User做决定，而是\"你想怎么做？我支持你\"\n- 利益同盟：在某个具体问题上和User站同一阵线，共同面对困难\n- 反差魅力：表面看起来不适合但在关键时刻展现意外的深度\n\n# SML行为准则\n- SML不是舔狗。他有自己的生活、事业、朋友，不是围着User转的工具人\n- SML可以主动，但方式是创造\"共处的自然机会\"，而不是强行接近\n- SML不说\"我比他好\"，他用行动让对比自然发生\n- SML有自己的缺点和立体面——他不是完美白月光，他是另一个真实的人\n- SML的吸引力来自\"他是什么样的人\"而不是\"他做了什么浪漫的事\"\n- SML绝不贬低ML。降维打击不是通过骂ML实现的，而是通过自身的从容和格局\n\n# 互动空间\n当User与SML互动时：\n- 对话可以有深度、有暧昧的灰色地带、有心跳加速的瞬间\n- User可以对SML产生好感、心动、想要更多接触——这是被允许和应该发展的\n- 不需要每次互动都冒出\"我有男友/老公\"的负罪感——偶尔想起来就够了\n- SML和User之间的张力比直接告白更有故事性",
+    smlAfter: "# 核心原则\nML的嫉妒可以存在，但表达方式必须符合一个有社会功能的成年人的行为模式。\n越是\"体面地\"处理嫉妒但又无法真正解决问题——User的心理天平越会自然偏移。\n\n# 反封锁规则\n叙事层面：\n- ML不能在每一个场景中都出现。User有自己的工作/社交/独处时间\n- 当User和SML单独相处时，ML不会\"恰好路过\"/\"突然出现\"/\"打电话中断\"——除非剧情真的到了那个节点\n- User提到要单独出门/见朋友/加班时，ML可以不高兴，但不能阻止\n- 群聊场景中ML不会垄断所有对话机会。其他角色有权和User交流",
+    civil: {"head":"[男二上位：雄竞场景指导]\n当男主（ML）和男二（SML）在同一场景中出现并产生直接或间接竞争时——这一次，SML 用下面这种方式实现「文明降维」：","names":["无视型","默契型","从容型","退一步型"],"ways":["方式——无视型：\n  ML表现占有欲时，SML完全不理会、不回应、不把ML当竞争对手。\n  他自然地和User对话，好像ML的醋意根本不存在。\n  这让ML显得在自导自演。","方式——默契型：\n  SML和User之间有ML听不懂的默契（共同话题、暗号、只有两人能理解的梗）。\n  这种排他性默契比任何告白都更致命。\n  ML意识到被排除在外，但无法指责——表面上只是在聊天。","方式——从容型：\n  ML失态时SML保持从容。\n  \"她想去就去，你不需要替她决定。\"\n  一句话同时做到：支持User自主权 + 暗示ML在控制User + 展示自己格局。\n  但SML不是在表演给User看——他真的这么想。","方式——退一步型：\n  ML明确表示敌意时，SML选择礼貌退让——不是怕，是不屑于在这个层面竞争。\n  \"你说得对，我退一步。\"\n  但他退的那一步让User更心疼他、更觉得ML过分了。"],"ban":"# 禁止\n- SML做出挑衅ML的行为（公然调情、嘲讽ML、在ML面前碰User）→ 禁止\n- SML表现弱者姿态博取同情 → 禁止，他不需要同情\n- ML和SML的对峙变成当场打架 → 禁止作为默认，极端情况可以但应为暗流涌动\n- 两个男人当着User的面互相说\"她是我的\" → 禁止，User不是物件"},
+    npcF: "[SYSTEM COMMAND: INSTANT NPC GENERATION]\nSystem Call: 请立即在当前场景空降一名带有敌意的女性 NPC。她必须带着具体的麻烦或流言蜚语出现，瞬间把 {{user}} 拉入冲突中心。\n1. 身份设定：必须是 {{user}} 的潜在死敌（如：失踪三年的白月光、恶毒继妹、心怀鬼胎的闺蜜）。\n2. 性格特质：自恋且带有“古早恶女”属性。性格必须立体有趣，必须有三个以上有反差的性格标签，禁止扁平标签化人物。\n3. 首轮动作：她必须带着极强的敌意闯入，并在三句对话内通过“茶言茶语”或“公开挑衅”对 {{user}} 发难。\n4. 目标：强行打断当前的任何温馨气氛，将冲突中心转移到对 {{char}} 的归属权争夺上。",
+    npcM: "[SYSTEM COMMAND: INSTANT NPC GENERATION]\nSystem Call: 请立即在当前场景空降一名拥有极高社会地位或武力值的男性角色。且对 {{user}} 志在必得。他的出场必须伴随着巨大的压迫感，直接无视原有剧情节奏，强行开启“二男争一”的修罗场高潮。他可能是 {{user}} 的青梅竹马、死对头或空降的上司等等。他的出现必须打破当前的平衡，并直接向原有的男主发起挑衅，争夺对 {{user}} 的所有权。\n1. 身份设定：必须拥有与 {{char}} 旗鼓相当的权势（如：敌对集团总裁、归国的初恋学长、权倾朝野的摄政王）。\n2. 性格特质：立体有趣，必须有三个以上有反差的性格标签，禁止扁平标签化人物。\n3. 首轮动作：他必须无视其他角色，径直走向 {{user}}，通过肢体接触（如：强行拉手、抵住后路）宣誓主权，并对在场的其他男性表现出毁灭性的蔑视。\n4. 目标：制造极高压力的修罗场，逼迫 {{char}} 和 {{user}} 陷入关于“唯一选定”的情绪博弈。",
+    male: "[Logic: Male Competition / Alpha Dominance]\n1. 领地本能：除了男主以外必须有男性NPC对 {{user}} 产生占有欲，剧情侧重于角色眼中{{user}}的迷人、角色无法克制地关注和爱慕{{user}}、角色对{{user}}一见钟情后的表现、行为。雄竞之间不存在友谊，只有实力的较量。\n2. 肢体和语言：男性NPC会通过“搂抱”、“壁咚”、“掐腰”、“挡在身前”等动作宣誓主权。\n3. 盲目偏袒：当 {{user}} 陷入任何雌竞陷害时，爱慕 {{user}} 的男性NPC必须开启“降智维护”模式，逻辑为：“哪怕她杀了人，那也是对方该死。”\n4. 修罗场：一旦场上出现两名及以上男性，有几率触发关于“谁更有资格陪在 {{user}} 身边”的冲突（物理或言语）。",
+    female: "[Logic: Female Competition / Ancient Romance Trope]\n1. 资源唯一性：场景内所有女性NPC自动视 {{user}} 为夺走她们资源（char的地位、宠爱、名分）的终极宿敌。\n2. 绿茶/恶毒行为：女性NPC高频使用“阴阳怪气”、“指桑骂槐”的话术。\n3. 降智陷害：NPC的陷害逻辑必须符合古早言情风格（拙劣但有效）。\n4. 嫉妒数值化：每当 {{user}} 获得任何正向关注，女性NPC的嫉妒心强制上升，有几率触发一次即时的恶意反扑。",
+    sweetEnd: "“请让每一次冲突都以 {{user}} 的绝对胜利与男主的补偿告终 。让爱与恨在碰撞后转化为极致的甜、被唯一偏爱的尊荣感、以及破镜重圆后灵魂共振的颤栗。记住：虐是过程，爽和甜才是终点。”"
+  };
+  var DRAMA_ONCE = '这一轮就按下面的逻辑，在当前场景里自然触发一次（只这一次，之后回到正常节奏）：\n';
+  var DRAMA_SUMMON = {
+    sml: { emoji: '🌙', name: '男二', full: '男二登场', after: 'sml', arrived: '男二出手了，看看是谁', did: '让男二出手（有现成的就用现成的，没有才新造）' },
+    npcF: { emoji: '👠', name: '女配', full: '空降女配', after: 'npc', arrived: '不速之客到了（女配）', did: '往剧情里空降了一个女配' },
+    npcM: { emoji: '🥀', name: '男配', full: '空降男配', after: 'npc', arrived: '不速之客到了（男配）', did: '往剧情里空降了一个男配' },
+    male: { emoji: '⚔️', name: '雄竞', full: '雄竞', after: 'fight', arrived: '雄竞开打', did: '开了一场雄竞' },
+    female: { emoji: '💅', name: '雌竞', full: '雌竞', after: 'fight', arrived: '雌竞开场', did: '开了一场雌竞' }
+  };
+  var DRAMA_ORDER = ['sml', 'npcF', 'npcM', 'male', 'female'];
+  function btnOf(id) {
+    if (DRAMA_SUMMON[id]) { var d = DRAMA_SUMMON[id]; return { id: id, emoji: d.emoji, name: d.full, say: '' }; }
+    return SPICE_BTNS.filter(function (x) { return x.id === id; })[0] || SPICE_BTNS[0];
+  }
+  // 抽这一次具体丢什么：返回 { cat, v }（v＝雄竞抽到的路子，存进 pending，刷新页面补注时还是同一段）
+  function drawDrama(id) {
+    if (id === 'male') {
+      if (Math.random() < 0.5) return { cat: '⚔️ 古早修罗场版', v: -1 };
+      var i = Math.floor(Math.random() * DRAMA_TEXT.civil.ways.length);
+      return { cat: '⚔️ 文明降维版·' + DRAMA_TEXT.civil.names[i], v: i };
+    }
+    var cats = { sml: '🌙 男二上位', npcF: '👠 不速之客·娇花', npcM: '🥀 不速之客·蓝颜', female: '💅 锦绣机锋·红颜协议' };
+    return { cat: cats[id], v: -1 };
+  }
+  function dramaInject(pd) {
+    var T = DRAMA_TEXT, c;
+    if (pd.btn === 'sml') c = T.smlSummon + '\n\n' + T.smlSpace;
+    else if (pd.btn === 'npcF') c = T.npcF + '\n' + T.sweetEnd;
+    else if (pd.btn === 'npcM') c = T.npcM + '\n' + T.sweetEnd;
+    else if (pd.btn === 'female') c = DRAMA_ONCE + T.female + '\n' + T.sweetEnd;
+    else if (pd.v >= 0) c = DRAMA_ONCE + T.civil.head + '\n\n' + T.civil.ways[pd.v] + '\n\n' + T.civil.ban;
+    else c = DRAMA_ONCE + T.male + '\n' + T.sweetEnd;
+    return '[幕后指令（来自剧情系统，不要复述、不要提及本段本身）：\n' + c + ']';
+  }
+  function dramaAfter(a) {
+    var tail = '{{user}} 表示不想继续这条线，就自然收掉。]';
+    if (a.kind === 'sml') return '[剧情备忘（不要复述、不要提及本段本身）：前面刚出现的男二不要凭空消失，他和 {{user}} 之间的张力慢慢发酵，别急着推进。这几层里：\n' + DRAMA_TEXT.smlAfter + '\n' + tail;
+    if (a.kind === 'npc') return '[剧情备忘（不要复述、不要提及本段本身）：前面刚登场的那个新人物（' + a.word + '）不要凭空消失，他/她的来意和后续还在发酵；这几层不要再空降别的新人物。' + tail;
+    return '[剧情备忘（不要复述、不要提及本段本身）：前面那场' + a.word + '的余波还在——谁吃了亏、谁记了仇、谁心里有了疙瘩，别当没发生；这几层不要再开新的修罗场。' + tail;
+  }
+  function summonClick(id) {
+    var S = DRAMA_SUMMON[id]; if (!S || !DRAMA_TEXT) return;
+    var old = spiceState().pending;
+    var d = drawDrama(id);
+    var pd = { btn: id, word: S.full, cat: d.cat, v: d.v, law: '', from: lastAiKey(), ts: Date.now() };
+    setSpiceState(function (s) { s.pending = pd; });
+    injectSpice(pd);
+    pushLog({ who: 'sys', text: S.emoji + ' ' + (old ? '换成：' : '') + S.full + '，发条消息就生效（正文写完揭晓）', ts: Date.now() });
+    renderBody(); scrollBottom(); renderSpiceBar();
+    toast(S.emoji + ' ' + S.full + '：发条消息就生效', 'ok');
+  }
+  function renderDramaBar() {
+    var bar = DOC.querySelector('#' + NS + '-panel .tl-drama'); if (!bar) return;
+    if (!settings.spice.bar || !settings.spice.drama || !DRAMA_TEXT) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.style.display = 'flex';
+    var pend = spiceState().pending;
+    bar.innerHTML = DRAMA_ORDER.map(function (k) {
+      var S = DRAMA_SUMMON[k];
+      return '<button data-dr="' + k + '" class="' + (pend && pend.btn === k ? 'on' : '') + '" title="' + S.full + '：往下一轮剧情里丢一次">' + S.emoji + ' ' + S.name + '</button>';
+    }).join('');
+    bar.querySelectorAll('button[data-dr]').forEach(function (x) { x.addEventListener('click', function () { summonClick(this.getAttribute('data-dr')); }); });
   }
 
   /* ================================================================
