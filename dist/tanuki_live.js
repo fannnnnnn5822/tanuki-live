@@ -37,6 +37,8 @@
  *                           ⚔️ 雄竞（盲抽古早版或文明降维版）/ 💅 雌竞，全是一次性，走加料同一条管道：揭晓、人格点评、3 层余波
  *       0.1.44 (2026-09-23) Fan：两排雷霆大按钮影响日常聊天 → 全收进输入框左边一个 🧂 键，点开才出现，选完自动收；
  *                           装填了料的时候 🧂 变成那一味的 emoji、描一圈边，一眼知道下一轮带着东西
+ *       0.1.45 (2026-10-10) 玩家报「只读得到 user，char 正文读不到」：正文层清洗兜底（洗空就退回温和清洗，围栏/思维容器留内容）；
+ *                           AI 层全被隐藏时改读全部层
  *
  * 它是什么：一个酒馆助手脚本。悬浮球 → 小窗。窗里坐着一个"陪玩人格"（Akuma / 嗑学家 /
  * 攻略党 / 红笔编辑 / 你自己导入的任何 NPC……），每回合正文出来后它看一眼，说两句——
@@ -55,7 +57,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.44';
+  var VERSION = '0.1.45';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -1479,6 +1481,25 @@
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
+  // 0.1.45（玩家报「只读得到 user，char 的正文读不到」）：有些预设/正则把整层正文包在 ``` 围栏或 thinking 类容器里，
+  // 严格清洗一刀下去 char 层只剩「[代码块]」或空白，user 层没标签所以完好——模型就以为 char 那边什么都没写。
+  // 兜底：洗完一个字都不剩就退回温和清洗——围栏留内容、思维容器只脱壳不删内容、标签照常脱壳。
+  function stripGentle(s) {
+    return String(s || '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/```[a-z]*\n?/gi, '')
+      .replace(/<[^>\n]{1,300}>/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  function stripProse(s) {
+    var raw = String(s || ''), out = stripJunk(raw);
+    var core = out.replace(/\[代码块\]/g, '').trim();
+    if (!core && raw.trim()) { var g = stripGentle(raw); if (g) return g; }
+    return out;
+  }
   function safeJson(obj, max) {
     try {
       var s = JSON.stringify(obj, function (k, v) {
@@ -1517,9 +1538,11 @@
       if (last >= 0 && typeof getChatMessages === 'function') {
         var from = Math.max(0, last - nFloors + 1);
         var msgs = getChatMessages(from + '-' + last, { hide_state: 'unhidden' }) || [];
+        // 0.1.45：有的卡把 AI 层隐藏起来另用界面展示——读出来一层 char 都没有就改读全部层（含隐藏）
+        if (msgs.length && !msgs.some(function (m) { return m.role !== 'user'; })) msgs = getChatMessages(from + '-' + last, { hide_state: 'all' }) || msgs;
         // 0.1.32（Fan：别做 token 限制）：正文整层原样给，不截断；要省就在设置里少读几层
         ctx.recent = msgs.map(function (m) {
-          return { id: m.message_id, who: m.role === 'user' ? '<user>' : (m.name || '正文'), text: stripJunk(m.message) };
+          return { id: m.message_id, who: m.role === 'user' ? '<user>' : (m.name || '正文'), text: stripProse(m.message) };
         });
       }
     } catch (e) {}
