@@ -57,7 +57,7 @@
   'use strict';
   var NS = 'tanuki-live';
   var BTN = '🦝 小狸';
-  var VERSION = '0.1.45';
+  var VERSION = '0.1.46';
   var DOC, VIEW;
   try { VIEW = window.parent; DOC = VIEW.document; } catch (e) { return; }
   if (!DOC) return;
@@ -658,17 +658,40 @@
     head.addEventListener('pointerup', up);
     head.addEventListener('pointercancel', function () { dragging = false; });
   }
+  // 0.1.46：面板从球的位置弹出来、收回球里去（iOS 开关 App 那种），变形原点对准球心
+  var panelAnim = null;
+  function originAtBall(p) {
+    try {
+      var b = DOC.getElementById(NS + '-ball').getBoundingClientRect(), r = p.getBoundingClientRect();
+      p.style.transformOrigin = ((b.left + b.width / 2 - r.left) / CAL.sx) + 'px ' + ((b.top + b.height / 2 - r.top) / CAL.sy) + 'px';
+    } catch (e) {}
+  }
   function setOpen(open) {
     var p = DOC.getElementById(NS + '-panel'); if (!p) return;
-    if (!open) { p.style.display = 'none'; p.style.transform = ''; snapSoon(2500); return; }
+    var wasOpen = isOpen();   // reflow 会对着已经开着的面板再调 setOpen(true) 重新摆位——那种不重播动画
+    if (panelAnim && open !== wasOpen) { try { panelAnim.cancel(); } catch (e) {} panelAnim = null; }   // 只在开↔关真的换向时掐掉上一段
+    if (!open) {
+      if (p.style.display !== 'flex' || p.dataset.closing) return;
+      p.dataset.closing = '1';
+      originAtBall(p);
+      var a = spring(p, [{ transform: p.style.transform || 'none', opacity: 1 }, { transform: 'scale(.4)', opacity: 0 }], 'quick', { fill: 'forwards' });
+      var done = function () { if (!p.dataset.closing) return; delete p.dataset.closing; p.style.display = 'none'; p.style.transform = ''; if (a) try { a.cancel(); } catch (e) {} panelAnim = null; snapSoon(2500); };
+      if (a) { panelAnim = a; a.onfinish = done; } else done();
+      return;
+    }
+    delete p.dataset.closing;
     p.style.display = 'flex';
     hideBubble();
     unsnap();
     placePanel();
+    if (!wasOpen) shown.key = null;   // 开窗那一下面板自己在弹，里面的消息别再跟着弹
     renderAll();
     scrollBottom();
+    if (wasOpen) return;
+    originAtBall(p);
+    panelAnim = spring(p, [{ transform: 'scale(.4)', opacity: 0 }, { transform: 'none', opacity: 1 }], 'snappy');
   }
-  function isOpen() { var p = DOC.getElementById(NS + '-panel'); return !!p && p.style.display === 'flex'; }
+  function isOpen() { var p = DOC.getElementById(NS + '-panel'); return !!p && p.style.display === 'flex' && !p.dataset.closing; }
   function typingInPanel() { try { var a = DOC.activeElement; var p = DOC.getElementById(NS + '-panel'); return !!(a && p && p.contains(a) && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT')); } catch (e) { return false; } }
   // 键盘弹出：不缩面板，整块往上平移到键盘上方
   function liftForKeyboard() {
@@ -697,24 +720,71 @@
   function reflowSoon() { clearTimeout(kvTimer); kvTimer = setTimeout(reflow, 300); }
 
   /* ================================================================
+     弹簧动画（0.1.46，Fan：要 iPhone 那种「抖一下」——不丝滑不生硬）
+     参数直接抄苹果 SwiftUI 的 Spring(duration:bounce:)：ω=2π/duration，阻尼比 ζ=1−bounce，
+     把弹簧曲线采样成 CSS linear() 缓动（Chrome 113+/Safari 17.2+），老内核退回近似的 cubic-bezier。
+     系统开了「减少动态效果」就全部不动。
+     ================================================================ */
+  var SPR = null;
+  function springCurve(duration, bounce) {
+    var w = 2 * Math.PI / duration, z = 1 - bounce, wd = w * Math.sqrt(Math.max(0, 1 - z * z));
+    function x(t) {
+      if (z >= 1) return 1 - Math.exp(-w * t) * (1 + w * t);
+      return 1 - Math.exp(-z * w * t) * (Math.cos(wd * t) + (z * w / wd) * Math.sin(wd * t));
+    }
+    var T = 0;   // 停稳时间：最后一次离终点还超过 0.2% 的时刻
+    for (var t = 0; t <= 3; t += 0.004) if (Math.abs(1 - x(t)) > 0.002) T = t;
+    T = Math.max(T, 0.12);
+    var pts = [];
+    for (var i = 0; i <= 40; i++) pts.push((i === 40 ? 1 : Math.round(x(T * i / 40) * 10000) / 10000));
+    return { ms: Math.round(T * 1000), lin: 'linear(' + pts.join(', ') + ')' };
+  }
+  function springs() {
+    if (SPR) return SPR;
+    var lin = false, rm = false;
+    try { lin = !!(VIEW.CSS && VIEW.CSS.supports('transition-timing-function', 'linear(0, 1)')); } catch (e) {}
+    try { rm = !!(VIEW.matchMedia && VIEW.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+    function mk(d, b, fallback) {
+      var c = springCurve(d, b);
+      return lin ? { ms: c.ms, ease: c.lin, s: c.ms + 'ms ' + c.lin } : { ms: Math.round(d * 1000), ease: fallback, s: Math.round(d * 1000) + 'ms ' + fallback };
+    }
+    SPR = {
+      rm: rm,
+      bouncy: mk(0.5, 0.3, 'cubic-bezier(.34,1.5,.64,1)'),    // .bouncy：按钮回弹、气泡、新消息
+      snappy: mk(0.5, 0.15, 'cubic-bezier(.3,1.2,.5,1)'),     // .snappy：面板从球里弹出来
+      smooth: mk(0.5, 0, 'cubic-bezier(.25,.9,.3,1)'),        // .smooth：设置页推进来（iOS 导航那种不弹）
+      quick: mk(0.32, 0, 'cubic-bezier(.4,0,.2,1)')           // 收起：快，不回弹
+    };
+    return SPR;
+  }
+  function spring(el, frames, kind, opt) {
+    var s = springs(); if (!el || !el.animate || s.rm) return null;
+    try { return el.animate(frames, { duration: s[kind].ms, easing: s[kind].ease, delay: (opt && opt.delay) || 0, fill: (opt && opt.fill) || 'none' }); } catch (e) { return null; }
+  }
+
+  /* ================================================================
      CSS
      ================================================================ */
   function css() {
+    var S = springs();
     var p = currentPersona();
     return [
-      '#' + NS + '-ball{position:fixed;right:22px;bottom:150px;width:54px;height:54px;box-sizing:border-box;z-index:2147483600;cursor:grab;display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;background:none;border:none;box-shadow:none;filter:drop-shadow(0 6px 13px rgba(0,0,0,.55));transition:transform .2s cubic-bezier(.2,.8,.25,1)}',
-      '#' + NS + '-ball:hover{transform:scale(1.09) rotate(-3deg)}',
-      '#' + NS + '-ball.tl-snap-r{transform:translateX(52%);opacity:.5}',
-      '#' + NS + '-ball.tl-snap-l{transform:translateX(-52%);opacity:.5}',
+      '#' + NS + '-ball{position:fixed;right:22px;bottom:150px;width:54px;height:54px;box-sizing:border-box;z-index:2147483600;cursor:grab;display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;background:none;border:none;box-shadow:none;filter:drop-shadow(0 6px 13px rgba(0,0,0,.55));transition:transform ' + S.bouncy.s + ',opacity .3s}',
+      '@media (hover:hover){#' + NS + '-ball:hover{transform:scale(1.09) rotate(-3deg)}}',
+      '#' + NS + '-ball.tl-snap-r{transform:translateX(52%);opacity:.5;transition:transform ' + S.smooth.s + ',opacity .4s}',
+      '#' + NS + '-ball.tl-snap-l{transform:translateX(-52%);opacity:.5;transition:transform ' + S.smooth.s + ',opacity .4s}',
+      // 0.1.46：按下去一缩、拖起来一浮（像 iOS 长按拎起图标），松手按 .bouncy 弹回原样
+      '#' + NS + '-ball.tl-press{transform:scale(.86);transition:transform .12s ease-out}',
+      '#' + NS + '-ball.tl-lift{transform:scale(1.12);filter:drop-shadow(0 12px 22px rgba(0,0,0,.5));transition:transform ' + S.bouncy.s + '}',
       '#' + NS + '-ball.tl-snap-r .tl-badge{right:auto;left:-3px}',
       '#' + NS + '-ball.tl-snap-r .tl-bubble{right:auto;left:-4px;border-bottom-right-radius:13px;border-bottom-left-radius:4px;transform-origin:bottom left}',
       '#' + NS + '-ball .tl-face{display:block;width:100%;height:100%;animation:tlFloat 4.7s ease-in-out infinite}',
       '#' + NS + '-ball .tl-face svg{display:block;width:100%;height:100%;overflow:visible}',
       '@keyframes tlFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}',
-      '#' + NS + '-ball:active{cursor:grabbing;transform:scale(.94)}',
+      '#' + NS + '-ball:active{cursor:grabbing}',
       '#' + NS + '-ball .tl-badge{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;border-radius:9px;background:#fff;color:#c0392b;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 1px 4px rgba(0,0,0,.3);font-family:-apple-system,PingFang SC,sans-serif}',
-      '#' + NS + '-ball .tl-bubble{position:absolute;bottom:calc(100% + 12px);right:-4px;max-width:min(250px,70vw);width:max-content;padding:8px 12px;border-radius:13px;border-bottom-right-radius:4px;background:rgba(22,24,32,.96);color:#eaeaf0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;text-align:left;cursor:pointer;border:1px solid ' + p.color + ';box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;opacity:0;transform:translateY(6px) scale(.96);transform-origin:bottom right;transition:opacity .18s,transform .18s;pointer-events:none;z-index:1}',
-      '#' + NS + '-ball .tl-bubble.on{opacity:1;transform:none;pointer-events:auto}',
+      '#' + NS + '-ball .tl-bubble{position:absolute;bottom:calc(100% + 12px);right:-4px;max-width:min(250px,70vw);width:max-content;padding:8px 12px;border-radius:13px;border-bottom-right-radius:4px;background:rgba(22,24,32,.96);color:#eaeaf0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;text-align:left;cursor:pointer;border:1px solid ' + p.color + ';box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;opacity:0;transform:translateY(10px) scale(.82);transform-origin:bottom right;transition:opacity .15s,transform .15s ease-in;pointer-events:none;z-index:1}',
+      '#' + NS + '-ball .tl-bubble.on{opacity:1;transform:none;pointer-events:auto;transition:opacity .18s,transform ' + S.bouncy.s + '}',
       '#' + NS + '-ball .tl-bubble::after{content:"";position:absolute;top:100%;right:18px;border:6px solid transparent;border-top-color:' + p.color + '}',
       '#' + NS + '-ball .tl-bubble .tl-bname{display:block;font-size:10.5px;color:' + p.color + ';font-weight:700;margin-bottom:2px}',
       '#' + NS + '-ball.tl-busy{animation:' + NS + '-pulse 1s ease-in-out infinite}',
@@ -733,7 +803,7 @@
       '#' + NS + '-panel .tl-ib{width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#ddd;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none;padding:0}',
       '#' + NS + '-panel .tl-ib:hover{background:rgba(255,255,255,.12)}',
       '#' + NS + '-panel .tl-ib.on{background:' + p.color + ';border-color:transparent;color:#fff}',
-      '#' + NS + '-panel .tl-body{flex:1;overflow-y:auto;padding:12px 12px 6px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}',
+      '#' + NS + '-panel .tl-body{flex:1;overflow-y:auto;padding:12px 12px 6px;display:flex;flex-direction:column;gap:10px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}',
       '#' + NS + '-panel .tl-msg{max-width:88%;padding:9px 12px;border-radius:14px;white-space:pre-wrap;word-break:break-word;position:relative}',
       '#' + NS + '-panel .tl-msg.them{align-self:flex-start;background:rgba(255,255,255,.07);border-bottom-left-radius:4px;border-left:2px solid ' + p.color + '}',
       '#' + NS + '-panel .tl-msg.me{align-self:flex-end;background:' + p.color + ';color:#fff;border-bottom-right-radius:4px}',
@@ -763,7 +833,7 @@
       '#' + NS + '-panel .tl-kit.open{background:rgba(255,255,255,.16)}',
       '#' + NS + '-panel .tl-kit.loaded{border-color:' + p.color + ';box-shadow:0 0 0 1px ' + p.color + ' inset}',
       '#' + NS + '-panel .tl-send:disabled{opacity:.5;cursor:default}',
-      '#' + NS + '-panel .tl-set{position:absolute;inset:0;background:rgba(22,24,32,.98);display:none;flex-direction:column;padding:12px;overflow-y:auto;gap:12px;z-index:5}',
+      '#' + NS + '-panel .tl-set{position:absolute;inset:0;background:rgba(22,24,32,.98);display:none;flex-direction:column;padding:12px;overflow-y:auto;overscroll-behavior:contain;gap:12px;z-index:5}',
       '#' + NS + '-panel .tl-set.open{display:flex}',
       '#' + NS + '-panel .tl-set h4{margin:0;font-size:13px;color:#fff;display:flex;align-items:center;justify-content:space-between}',
       '#' + NS + '-panel .tl-set label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:rgba(255,255,255,.8);padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05)}',
@@ -782,6 +852,10 @@
       // 0.1.33：自检口「它这轮看到了什么」——原样摊开的 contextBlock，自己能滚，不许撑破面板
       '#' + NS + '-panel .tl-set .tl-pre{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.35) !important;color:#dfe3ea !important;-webkit-text-fill-color:#dfe3ea;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:10px;font-family:ui-monospace,Menlo,Consolas,"PingFang SC",monospace;font-size:11px;line-height:1.5;-webkit-overflow-scrolling:touch;user-select:text}',
       '#' + NS + '-panel .tl-mask{-webkit-text-security:disc}',
+      // 0.1.46：所有按钮按下一缩（快）、松手 .bouncy 弹回（带一点过冲）
+      '#' + NS + '-panel .tl-ib,#' + NS + '-panel .tl-send,#' + NS + '-panel .tl-kit,#' + NS + '-panel .tl-sug button,#' + NS + '-panel .tl-spice button,#' + NS + '-panel .tl-set .tl-pill,#' + NS + '-panel .tl-set .tl-btn{transition:transform ' + S.bouncy.s + ',background-color .2s,opacity .2s;-webkit-tap-highlight-color:transparent}',
+      '#' + NS + '-panel .tl-ib:active,#' + NS + '-panel .tl-send:active:not(:disabled),#' + NS + '-panel .tl-kit:active,#' + NS + '-panel .tl-sug button:active:not(:disabled),#' + NS + '-panel .tl-spice button:active,#' + NS + '-panel .tl-set .tl-pill:active,#' + NS + '-panel .tl-set .tl-btn:active{transform:scale(.9);transition:transform .1s ease-out}',
+      '@media (prefers-reduced-motion:reduce){#' + NS + '-ball,#' + NS + '-ball *,#' + NS + '-panel *{transition:none !important}}',
       '@media (max-width:500px){#' + NS + '-panel{border-radius:14px}}'
     ].join('\n');
   }
@@ -1063,7 +1137,14 @@
     var sendBtn = panel.querySelector('.tl-send');
     function doSend() { var t = ta.value.trim(); if (!t) return; ta.value = ''; ta.style.height = ''; ask(t); }
     sendBtn.addEventListener('click', doSend);
-    panel.querySelector('.tl-kit').addEventListener('click', function () { spiceOpen = !spiceOpen; renderSpiceBar(); if (spiceOpen) scrollBottom(); });
+    panel.querySelector('.tl-kit').addEventListener('click', function () {
+      spiceOpen = !spiceOpen; renderSpiceBar();
+      if (spiceOpen) {
+        scrollBottom();
+        // 0.1.46：两排技能从输入框上方弹出来，按钮一个接一个（像 iOS 的快捷操作）
+        panel.querySelectorAll('.tl-spice button').forEach(function (b, i) { spring(b, [{ transform: 'translateY(10px) scale(.85)', opacity: 0 }, { transform: 'none', opacity: 1 }], 'bouncy', { delay: i * 25, fill: 'backwards' }); });
+      }
+    });
     ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); doSend(); } });
     ta.addEventListener('input', function () { this.style.height = ''; this.style.height = Math.min(110, this.scrollHeight) + 'px'; });
 
@@ -1090,6 +1171,7 @@
       if (e.target && e.target.closest && e.target.closest('.tl-bubble')) { e.preventDefault(); hideBubble(); setOpen(true); setUnread(0); return; }
       unsnap();
       dragging = true; moved = false;
+      ball.classList.add('tl-press');
       var r = ball.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
       try { ball.setPointerCapture(e.pointerId); } catch (err) {}
       e.preventDefault();
@@ -1097,19 +1179,20 @@
     ball.addEventListener('pointermove', function (e) {
       if (!dragging) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
-      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
+      if (!moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) { moved = true; ball.classList.remove('tl-press'); ball.classList.add('tl-lift'); }
       if (!moved) return;
       var c = clampXY(ox + dx, oy + dy, 56);
       setClientPos(ball, c.x, c.y);
     });
     function up(e) {
       if (!dragging) return; dragging = false;
+      ball.classList.remove('tl-press', 'tl-lift');
       try { ball.releasePointerCapture(e.pointerId); } catch (err) {}
       if (moved) { var r = ball.getBoundingClientRect(); if (isNarrow()) settings.posNarrow = { left: r.left, top: r.top }; else settings.pos = { left: r.left, top: r.top }; saveSettings(); snapSoon(1500); }
       else { setOpen(!isOpen()); if (isOpen()) setUnread(0); }
     }
     ball.addEventListener('pointerup', up);
-    ball.addEventListener('pointercancel', function () { dragging = false; snapSoon(1500); });
+    ball.addEventListener('pointercancel', function () { dragging = false; ball.classList.remove('tl-press', 'tl-lift'); snapSoon(1500); });
     ball.addEventListener('click', function (e) { e.preventDefault(); }); // 交给 pointerup
   }
 
@@ -1127,10 +1210,13 @@
     restyle();
   }
 
+  var shown = { key: null, n: 0 };   // 0.1.46：上次画到第几条——同一个记录里多出来的才弹，换人格/清空/重开窗不弹
   function renderBody() {
     var body = DOC.querySelector('#' + NS + '-panel .tl-body'); if (!body) return;
     var log = readLog();
     var p = currentPersona();
+    var prev = shown.key === logKey() ? shown.n : log.length;
+    shown = { key: logKey(), n: log.length };
     if (!log.length) {
       body.innerHTML = '<div class="tl-msg sys">' + esc(p.emoji + ' ' + dispName(p) + ' 坐下了。') + '<br>' + esc(settings.auto ? '正文每出来一回合它就会说两句；也可以直接问它。' : '自动弹幕关着，点 💬 让它说，或者直接问它。') + '</div>';
       return;
@@ -1162,6 +1248,14 @@
         '</div>';
     }
     body.innerHTML = html;
+    if (isOpen() && prev < log.length) {
+      // 新消息从底下冒上来：轻轻一缩→弹到原大小（.bouncy），从说话人那一侧的下角长出来；一次进来好几条就错开 70ms
+      for (var j = prev, d = 0; j < body.children.length; j++, d++) {
+        var el = body.children[j], mine = el.classList.contains('me');
+        el.style.transformOrigin = mine ? 'bottom right' : 'bottom left';
+        spring(el, [{ transform: 'translateY(14px) scale(.9)', opacity: 0 }, { transform: 'none', opacity: 1 }], 'bouncy', { delay: d * 70, fill: 'backwards' });
+      }
+    }
     body.querySelectorAll('button[data-adopt]').forEach(function (b) {
       b.addEventListener('click', function () {
         var pr = this.getAttribute('data-adopt').split(':');
@@ -1218,9 +1312,21 @@
      ================================================================ */
   function toggleSettings(force) {
     var s = DOC.querySelector('#' + NS + '-panel .tl-set'); if (!s) return;
-    var open = typeof force === 'boolean' ? force : !s.classList.contains('open');
-    s.classList.toggle('open', open);
-    if (open) renderSettings();
+    var open = typeof force === 'boolean' ? force : !s.classList.contains('open') || !!s.dataset.closing;
+    if (s._anim) { try { s._anim.cancel(); } catch (e) {} s._anim = null; }
+    delete s.dataset.closing;
+    // 0.1.46：设置页像 iOS 导航那样从右边推进来、推回去（.smooth，不弹）
+    if (open) {
+      var was = s.classList.contains('open');
+      s.classList.add('open'); renderSettings();
+      if (!was) s._anim = spring(s, [{ transform: 'translateX(100%)' }, { transform: 'none' }], 'smooth');
+      return;
+    }
+    if (!s.classList.contains('open')) return;
+    s.dataset.closing = '1';
+    var a = spring(s, [{ transform: 'none' }, { transform: 'translateX(100%)' }], 'quick', { fill: 'forwards' });
+    var done = function () { if (!s.dataset.closing) return; delete s.dataset.closing; s.classList.remove('open'); if (a) try { a.cancel(); } catch (e) {} s._anim = null; };
+    if (a) { s._anim = a; a.onfinish = done; } else done();
   }
   function renderSettings() {
     var s = DOC.querySelector('#' + NS + '-panel .tl-set'); if (!s) return;
